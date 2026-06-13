@@ -1,25 +1,57 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
-import { runInputSchema } from "@/shared/schemas/run";
+import { noteImageService } from "@/server/services/note-image-service";
+import {
+  plainTextToNoteHtml,
+  sanitizeNoteHtml,
+} from "@/server/services/note-content-service";
+import {
+  runArchiveSchema,
+  runInputSchema,
+  runNodeNoteSchema,
+  runTitleSchema,
+  runUpdateSchema,
+} from "@/shared/schemas/run";
 import { calculateRunStatus } from "@/shared/run-status";
-import { RunDto, RunNodeDto } from "@/shared/types/models";
+import { NoteContentDto, RunDto, RunNodeDto } from "@/shared/types/models";
 
 type RunRow = {
   id: string;
   templateId: string;
   templateNameSnapshot: string;
   templateDescriptionSnapshot: string | null;
+  title: string;
   version: string;
   startedAt: string | null;
   completedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
-type RunNodeRow = Omit<RunNodeDto, "isRequired" | "isParent"> & {
+type RunNodeRow = Omit<RunNodeDto, "isRequired" | "isParent" | "note"> & {
+  note: string | null;
   isRequired: number;
 };
+
+function parseNote(value: string | null): NoteContentDto | null {
+  if (!value) return null;
+
+  let parsed: { html?: string; text?: string; imageIds: string[] };
+  try {
+    parsed = JSON.parse(value) as { html?: string; text?: string; imageIds: string[] };
+  } catch {
+    return { html: plainTextToNoteHtml(value), images: [] };
+  }
+
+  return {
+    html: parsed.html
+      ? sanitizeNoteHtml(parsed.html).html
+      : plainTextToNoteHtml(parsed.text ?? ""),
+    images: noteImageService.getMany(parsed.imageIds),
+  };
+}
 
 function getRun(id: string): RunDto | null {
   const run = db.prepare("SELECT * FROM SopRun WHERE id = ?").get(id) as RunRow | undefined;
@@ -27,12 +59,13 @@ function getRun(id: string): RunDto | null {
 
   const rows = db.prepare(`
     SELECT id, nameSnapshot AS name, descriptionSnapshot AS description,
-           sortOrder, isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt
+           note, sortOrder, isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt
     FROM SopRunNode WHERE runId = ? ORDER BY sortOrder
   `).all(id) as RunNodeRow[];
   const parentIds = new Set(rows.map((node) => node.parentId).filter(Boolean));
   const nodes: RunNodeDto[] = rows.map((node) => ({
     ...node,
+    note: parseNote(node.note),
     isRequired: Boolean(node.isRequired),
     isParent: parentIds.has(node.id),
   }));
@@ -40,21 +73,27 @@ function getRun(id: string): RunDto | null {
   const requiredLeaves = leaves.filter((node) => node.isRequired);
   const completedCount = leaves.filter((node) => node.completedAt).length;
   const requiredCompletedCount = requiredLeaves.filter((node) => node.completedAt).length;
+  const progressLeaves = requiredLeaves.length > 0 ? requiredLeaves : leaves;
+  const progressCompletedCount = progressLeaves.filter((node) => node.completedAt).length;
 
   return {
     id: run.id,
     templateId: run.templateId,
     templateName: run.templateNameSnapshot,
     templateDescription: run.templateDescriptionSnapshot,
+    title: run.title,
     version: run.version,
     status: calculateRunStatus(run.startedAt, run.completedAt),
     startedAt: run.startedAt,
     completedAt: run.completedAt,
+    archivedAt: run.archivedAt,
     completedCount,
     totalCount: leaves.length,
     requiredCompletedCount,
     requiredTotalCount: requiredLeaves.length,
-    progressPercent: leaves.length ? Math.round((completedCount / leaves.length) * 100) : 0,
+    progressPercent: progressLeaves.length
+      ? Math.round((progressCompletedCount / progressLeaves.length) * 100)
+      : 0,
     nodes,
     createdAt: run.createdAt,
     updatedAt: run.updatedAt,
@@ -152,15 +191,15 @@ export const runService = {
         db.prepare(`
           INSERT INTO SopRun (
             id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
-            version, startedAt, completedAt, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-        `).run(id, template.id, template.name, template.description, data.version, now, now);
+            title, version, startedAt, completedAt, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+        `).run(id, template.id, template.name, template.description, data.title, data.version, now, now);
         const insert = db.prepare(`
           INSERT INTO SopRunNode (
-            id, runId, nameSnapshot, descriptionSnapshot, sortOrder,
+            id, runId, nameSnapshot, descriptionSnapshot, note, sortOrder,
             isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt,
             createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+          ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?)
         `);
         templateNodes.forEach((node) =>
           insert.run(
@@ -212,5 +251,67 @@ export const runService = {
       recalculateRun(getRun(runId) as RunDto, now);
     })();
     return this.get(runId);
+  },
+
+  async setNodeNote(runId: string, nodeId: string, input: unknown) {
+    const data = runNodeNoteSchema.parse(input);
+    const run = await this.get(runId);
+    if (!run.nodes.some((node) => node.id === nodeId)) {
+      throw new AppError("RUN_NODE_NOT_FOUND", "执行节点不存在", 404);
+    }
+    const content = data.note ? sanitizeNoteHtml(data.note.html) : null;
+    if (content && content.textLength > 2000) {
+      throw new AppError("NOTE_TOO_LONG", "备注文字不能超过 2000 个字符", 400);
+    }
+    const note =
+      data.note && content && (!content.isEmpty || data.note.imageIds.length > 0)
+        ? JSON.stringify({
+            html: content.html,
+            imageIds: noteImageService.getMany(data.note.imageIds).map((image) => image.id),
+          })
+        : null;
+    const now = new Date().toISOString();
+    db.transaction(() => {
+      db.prepare("UPDATE SopRunNode SET note = ?, updatedAt = ? WHERE id = ? AND runId = ?").run(
+        note,
+        now,
+        nodeId,
+        runId,
+      );
+      db.prepare("UPDATE SopRun SET updatedAt = ? WHERE id = ?").run(now, runId);
+    })();
+    return this.get(runId);
+  },
+
+  async setArchived(id: string, input: unknown) {
+    const data = runArchiveSchema.parse(input);
+    await this.get(id);
+    const now = new Date().toISOString();
+    db.prepare("UPDATE SopRun SET archivedAt = ?, updatedAt = ? WHERE id = ?").run(
+      data.archived ? now : null,
+      now,
+      id,
+    );
+    return this.get(id);
+  },
+
+  async setTitle(id: string, input: unknown) {
+    const data = runTitleSchema.parse(input);
+    await this.get(id);
+    const now = new Date().toISOString();
+    db.prepare("UPDATE SopRun SET title = ?, updatedAt = ? WHERE id = ?").run(data.title, now, id);
+    return this.get(id);
+  },
+
+  async update(id: string, input: unknown) {
+    const data = runUpdateSchema.parse(input);
+    return "archived" in data ? this.setArchived(id, data) : this.setTitle(id, data);
+  },
+
+  async remove(id: string) {
+    await this.get(id);
+    db.transaction(() => {
+      db.prepare("DELETE FROM SopRun WHERE id = ?").run(id);
+    })();
   },
 };

@@ -18,6 +18,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     description TEXT,
+    note TEXT,
     priority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(priority IN ('LOW', 'MEDIUM', 'HIGH')),
     dueAt TEXT,
     completedAt TEXT,
@@ -52,9 +53,11 @@ db.exec(`
     templateId TEXT NOT NULL,
     templateNameSnapshot TEXT NOT NULL,
     templateDescriptionSnapshot TEXT,
+    title TEXT NOT NULL,
     version TEXT NOT NULL,
     startedAt TEXT,
     completedAt TEXT,
+    archivedAt TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
     FOREIGN KEY(templateId) REFERENCES SopTemplate(id) ON DELETE RESTRICT,
@@ -62,11 +65,20 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS SopRun_completedAt_idx ON SopRun(completedAt);
 
+  CREATE TABLE IF NOT EXISTS NoteImage (
+    id TEXT PRIMARY KEY,
+    mimeType TEXT NOT NULL,
+    extension TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS SopRunNode (
     id TEXT PRIMARY KEY,
     runId TEXT NOT NULL,
     nameSnapshot TEXT NOT NULL,
     descriptionSnapshot TEXT,
+    note TEXT,
     sortOrder INTEGER NOT NULL,
     completedAt TEXT,
     firstCompletedAt TEXT,
@@ -81,7 +93,13 @@ db.exec(`
 function ensureColumn(table: string, column: string, definition: string) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
   if (!columns.some((item) => item.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    } catch (error) {
+      const isConcurrentDuplicate =
+        error instanceof Error && error.message.includes(`duplicate column name: ${column}`);
+      if (!isConcurrentDuplicate) throw error;
+    }
   }
 }
 
@@ -91,8 +109,20 @@ ensureColumn("SopRunNode", "isRequired", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("SopRunNode", "parentId", "TEXT");
 ensureColumn("SopRunNode", "firstCompletedAt", "TEXT");
 ensureColumn("SopRunNode", "lastModifiedAt", "TEXT");
+ensureColumn("SopRunNode", "note", "TEXT");
+ensureColumn("Todo", "note", "TEXT");
+ensureColumn("SopRun", "archivedAt", "TEXT");
+ensureColumn("SopRun", "title", "TEXT");
 
 db.exec(`
+  CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);
+`);
+
+db.exec(`
+  UPDATE SopRun
+  SET title = templateNameSnapshot || ' / ' || version
+  WHERE title IS NULL OR TRIM(title) = '';
+
   UPDATE SopRunNode
   SET firstCompletedAt = completedAt
   WHERE firstCompletedAt IS NULL AND completedAt IS NOT NULL;

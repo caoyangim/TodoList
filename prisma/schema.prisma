@@ -17,6 +17,7 @@ model Todo {
   id          String       @id @default(cuid())
   title       String
   description String?
+  note        String?
   priority    TodoPriority @default(MEDIUM)
   dueAt       DateTime?
   completedAt DateTime?
@@ -60,15 +61,18 @@ model SopRun {
   template                    SopTemplate  @relation(fields: [templateId], references: [id], onDelete: Restrict)
   templateNameSnapshot        String
   templateDescriptionSnapshot String?
+  title                       String
   version                     String
   startedAt                   DateTime?
   completedAt                 DateTime?
+  archivedAt                  DateTime?
   nodes                       SopRunNode[]
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
 
   @@unique([templateId, version])
   @@index([completedAt])
+  @@index([archivedAt])
 }
 
 model SopRunNode {
@@ -77,6 +81,7 @@ model SopRunNode {
   run                  SopRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   nameSnapshot        String
   descriptionSnapshot String?
+  note                String?
   sortOrder           Int
   isRequired          Boolean  @default(true)
   parentId            String?
@@ -89,4 +94,12 @@ model SopRunNode {
   updatedAt           DateTime @updatedAt
 
   @@unique([runId, sortOrder])
+}
+
+model NoteImage {
+  id        String   @id
+  mimeType  String
+  extension String
+  size      Int
+  createdAt DateTime @default(now())
 }

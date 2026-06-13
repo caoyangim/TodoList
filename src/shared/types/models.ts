@@ -4,6 +4,7 @@ export type TodoDto = {
   id: string;
   title: string;
   description: string | null;
+  note: NoteContentDto | null;
   priority: TodoPriority;
   dueAt: string | null;
   completedAt: string | null;
@@ -33,10 +34,23 @@ export type TemplateDto = {
 
 export type RunStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
 
+export type NoteImageDto = {
+  id: string;
+  url: string;
+  mimeType: string;
+  size: number;
+};
+
+export type NoteContentDto = {
+  html: string;
+  images: NoteImageDto[];
+};
+
 export type RunNodeDto = {
   id: string;
   name: string;
   description: string | null;
+  note: NoteContentDto | null;
   sortOrder: number;
   isRequired: boolean;
   parentId: string | null;
@@ -51,10 +65,12 @@ export type RunDto = {
   templateId: string;
   templateName: string;
   templateDescription: string | null;
+  title: string;
   version: string;
   status: RunStatus;
   startedAt: string | null;
   completedAt: string | null;
+  archivedAt: string | null;
   completedCount: number;
   totalCount: number;
   requiredCompletedCount: number;

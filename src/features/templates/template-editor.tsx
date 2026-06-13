@@ -6,6 +6,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, CornerDownRight, Plus, Trash2 } from "lu
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/shared/api-client";
 import { TemplateDto } from "@/shared/types/models";
+import { LoadingSpinner, LoadingState } from "@/components/loading";
 
 type NodeForm = {
   id: string;
@@ -208,7 +209,7 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
     );
   }
 
-  if (loading) return <div className="loading">正在加载模板...</div>;
+  if (loading) return <LoadingState label="正在加载模板..." />;
 
   return (
     <>
@@ -280,9 +281,16 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
         </div>
 
         <div className="form-actions">
-          <Link className="button" href="/templates">取消</Link>
+          <Link
+            aria-disabled={saving}
+            className={`button ${saving ? "disabled" : ""}`}
+            href={saving ? "#" : "/templates"}
+            onClick={(event) => saving && event.preventDefault()}
+          >
+            取消
+          </Link>
           <button className="button primary" disabled={saving} type="submit">
-            {saving ? "保存中..." : "保存模板"}
+            {saving ? <><LoadingSpinner /> 保存中...</> : "保存模板"}
           </button>
         </div>
       </form>

@@ -1,13 +1,46 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
-import { todoInputSchema, todoPatchSchema, todoStatusSchema } from "@/shared/schemas/todo";
-import { TodoDto } from "@/shared/types/models";
+import {
+  plainTextToNoteHtml,
+  sanitizeNoteHtml,
+} from "@/server/services/note-content-service";
+import { noteImageService } from "@/server/services/note-image-service";
+import {
+  todoInputSchema,
+  todoNoteSchema,
+  todoPatchSchema,
+  todoStatusSchema,
+} from "@/shared/schemas/todo";
+import { NoteContentDto, TodoDto } from "@/shared/types/models";
 
-type TodoRow = Omit<TodoDto, "priority"> & { priority: TodoDto["priority"] };
+type TodoRow = Omit<TodoDto, "priority" | "note"> & {
+  priority: TodoDto["priority"];
+  note: string | null;
+};
 
 function getTodoRow(id: string) {
   return db.prepare("SELECT * FROM Todo WHERE id = ?").get(id) as TodoRow | undefined;
+}
+
+function parseNote(value: string | null): NoteContentDto | null {
+  if (!value) return null;
+  let parsed: { html?: string; text?: string; imageIds: string[] };
+  try {
+    parsed = JSON.parse(value) as { html?: string; text?: string; imageIds: string[] };
+  } catch {
+    return { html: plainTextToNoteHtml(value), images: [] };
+  }
+  return {
+    html: parsed.html
+      ? sanitizeNoteHtml(parsed.html).html
+      : plainTextToNoteHtml(parsed.text ?? ""),
+    images: noteImageService.getMany(parsed.imageIds),
+  };
+}
+
+function toTodoDto(row: TodoRow): TodoDto {
+  return { ...row, note: parseNote(row.note) };
 }
 
 export const todoService = {
@@ -19,15 +52,17 @@ export const todoService = {
         : parsedStatus === "pending"
           ? "WHERE completedAt IS NULL"
           : "";
-    return db
+    return (
+      db
       .prepare(`SELECT * FROM Todo ${where} ORDER BY completedAt ASC, createdAt DESC`)
-      .all() as TodoDto[];
+        .all() as TodoRow[]
+    ).map(toTodoDto);
   },
 
   async get(id: string) {
     const todo = getTodoRow(id);
     if (!todo) throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
-    return todo;
+    return toTodoDto(todo);
   },
 
   async create(input: unknown) {
@@ -37,6 +72,7 @@ export const todoService = {
       id: randomUUID(),
       title: data.title,
       description: data.description,
+      note: null,
       priority: data.priority,
       dueAt: data.dueAt?.toISOString() ?? null,
       completedAt: null,
@@ -44,8 +80,12 @@ export const todoService = {
       updatedAt: now,
     };
     db.prepare(`
-      INSERT INTO Todo (id, title, description, priority, dueAt, completedAt, createdAt, updatedAt)
-      VALUES (@id, @title, @description, @priority, @dueAt, @completedAt, @createdAt, @updatedAt)
+      INSERT INTO Todo (
+        id, title, description, note, priority, dueAt, completedAt, createdAt, updatedAt
+      )
+      VALUES (
+        @id, @title, @description, @note, @priority, @dueAt, @completedAt, @createdAt, @updatedAt
+      )
     `).run(todo);
     return todo;
   },
@@ -70,6 +110,25 @@ export const todoService = {
     if (db.prepare("DELETE FROM Todo WHERE id = ?").run(id).changes === 0) {
       throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
     }
+  },
+
+  async setNote(id: string, input: unknown) {
+    await this.get(id);
+    const data = todoNoteSchema.parse(input);
+    const content = data.note ? sanitizeNoteHtml(data.note.html) : null;
+    if (content && content.textLength > 2000) {
+      throw new AppError("NOTE_TOO_LONG", "备注文字不能超过 2000 个字符", 400);
+    }
+    const note =
+      data.note && content && (!content.isEmpty || data.note.imageIds.length > 0)
+        ? JSON.stringify({
+            html: content.html,
+            imageIds: noteImageService.getMany(data.note.imageIds).map((image) => image.id),
+          })
+        : null;
+    const updatedAt = new Date().toISOString();
+    db.prepare("UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ?").run(note, updatedAt, id);
+    return this.get(id);
   },
 
   async setCompletion(id: string, completed: boolean) {

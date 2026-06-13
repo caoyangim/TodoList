@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Edit3, Plus, Trash2 } from "lucide-react";
+import { Check, Edit3, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/shared/api-client";
-import { TodoDto, TodoPriority } from "@/shared/types/models";
+import { NoteContentDto, TodoDto, TodoPriority } from "@/shared/types/models";
 import { EmptyState } from "@/components/empty-state";
+import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { Modal } from "@/components/modal";
+import { RichNoteEditor } from "@/components/rich-note-editor";
 
 type Status = "pending" | "completed" | "all";
 type TodoForm = {
@@ -41,18 +43,20 @@ export function TodoPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoDto | null | "new">(null);
+  const [noteTodo, setNoteTodo] = useState<TodoDto | null>(null);
+  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", images: [] });
   const [form, setForm] = useState<TodoForm>(emptyForm);
   const [error, setError] = useState("");
 
-  const loadTodos = useCallback(async () => {
-    setLoading(true);
+  const loadTodos = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError("");
     try {
       setTodos(await apiRequest<TodoDto[]>(`/api/todos?status=${status}`));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Todo 加载失败");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [status]);
 
@@ -77,6 +81,36 @@ export function TodoPage() {
     setError("");
   }
 
+  function openNote(todo: TodoDto) {
+    setNoteTodo(todo);
+    setNoteValue(todo.note ?? { html: "", images: [] });
+    setError("");
+  }
+
+  async function saveNote(event: React.FormEvent) {
+    event.preventDefault();
+    if (!noteTodo) return;
+    setBusyId(`note:${noteTodo.id}`);
+    setError("");
+    try {
+      const updated = await apiRequest<TodoDto>(`/api/todos/${noteTodo.id}/note`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          note: {
+            html: noteValue.html,
+            imageIds: noteValue.images.map((image) => image.id),
+          },
+        }),
+      });
+      setTodos((current) => current.map((todo) => (todo.id === updated.id ? updated : todo)));
+      setNoteTodo(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "备注保存失败");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function saveTodo(event: React.FormEvent) {
     event.preventDefault();
     setBusyId("form");
@@ -95,7 +129,7 @@ export function TodoPage() {
         });
       }
       setEditing(null);
-      await loadTodos();
+      await loadTodos(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "保存失败");
     } finally {
@@ -104,13 +138,13 @@ export function TodoPage() {
   }
 
   async function toggle(todo: TodoDto) {
-    setBusyId(todo.id);
+    setBusyId(`toggle:${todo.id}`);
     try {
       await apiRequest(`/api/todos/${todo.id}/completion`, {
         method: "PATCH",
         body: JSON.stringify({ completed: !todo.completedAt }),
       });
-      await loadTodos();
+      await loadTodos(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "操作失败");
     } finally {
@@ -120,10 +154,10 @@ export function TodoPage() {
 
   async function remove(todo: TodoDto) {
     if (!window.confirm(`确定删除“${todo.title}”吗？`)) return;
-    setBusyId(todo.id);
+    setBusyId(`delete:${todo.id}`);
     try {
       await apiRequest(`/api/todos/${todo.id}`, { method: "DELETE" });
-      await loadTodos();
+      await loadTodos(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "删除失败");
     } finally {
@@ -147,6 +181,7 @@ export function TodoPage() {
         {(["pending", "completed", "all"] as Status[]).map((value) => (
           <button
             className={`tab ${status === value ? "active" : ""}`}
+            disabled={loading}
             key={value}
             onClick={() => setStatus(value)}
           >
@@ -157,7 +192,7 @@ export function TodoPage() {
 
       {error && !editing ? <div className="error-banner" style={{ marginBottom: 14 }}>{error}</div> : null}
       {loading ? (
-        <div className="loading">正在加载...</div>
+        <LoadingState label="正在加载 Todo..." />
       ) : todos.length === 0 ? (
         <EmptyState
           title={status === "completed" ? "还没有已完成的 Todo" : "今天从一件小事开始"}
@@ -168,27 +203,73 @@ export function TodoPage() {
         <div className="list">
           {todos.map((todo) => {
             const due = formatDueDate(todo.dueAt);
+            const isToggling = busyId === `toggle:${todo.id}`;
+            const isDeleting = busyId === `delete:${todo.id}`;
+            const isBusy = isToggling || isDeleting;
             return (
               <article className="list-item" key={todo.id}>
                 <button
                   aria-label={todo.completedAt ? "恢复 Todo" : "完成 Todo"}
                   className={`check-button ${todo.completedAt ? "checked" : ""}`}
-                  disabled={busyId === todo.id}
+                  disabled={isBusy}
                   onClick={() => void toggle(todo)}
                 >
-                  {todo.completedAt ? <Check size={13} /> : null}
+                  {isToggling ? (
+                    <LoadingSpinner size={13} />
+                  ) : todo.completedAt ? (
+                    <Check size={13} />
+                  ) : null}
                 </button>
                 <div className="list-item-main">
                   <h2 className={`item-title ${todo.completedAt ? "completed-text" : ""}`}>{todo.title}</h2>
                   {todo.description ? <p className="item-description">{todo.description}</p> : null}
+                  {todo.note ? (
+                    <div className="node-note todo-note">
+                      <MessageSquare size={14} />
+                      <div className="node-note-content">
+                        {todo.note.html ? (
+                          <div
+                            className="rich-note-content"
+                            dangerouslySetInnerHTML={{ __html: todo.note.html }}
+                          />
+                        ) : null}
+                        {todo.note.images.length > 0 ? (
+                          <div className="note-image-grid display">
+                            {todo.note.images.map((image) => (
+                              <a
+                                href={image.url}
+                                key={image.id}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img alt="Todo 备注图片" src={image.url} />
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="item-meta">
                     <span className={`badge ${todo.priority.toLowerCase()}`}>{priorityText[todo.priority]}</span>
                     {due ? <span style={{ color: due.overdue && !todo.completedAt ? "var(--danger)" : undefined }}>{due.overdue && !todo.completedAt ? "已逾期 · " : ""}{due.label}</span> : null}
                   </div>
                 </div>
                 <div className="item-actions">
-                  <button className="button ghost icon-only" aria-label="编辑" onClick={() => openEdit(todo)}><Edit3 size={16} /></button>
-                  <button className="button ghost icon-only" aria-label="删除" disabled={busyId === todo.id} onClick={() => void remove(todo)}><Trash2 size={16} /></button>
+                  <button
+                    aria-label={todo.note ? "编辑备注" : "添加备注"}
+                    className="button ghost icon-only"
+                    disabled={isBusy}
+                    onClick={() => openNote(todo)}
+                    title={todo.note ? "编辑备注" : "添加备注"}
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                  <button className="button ghost icon-only" aria-label="编辑" disabled={isBusy} onClick={() => openEdit(todo)}><Edit3 size={16} /></button>
+                  <button className="button ghost icon-only" aria-label="删除" disabled={isBusy} onClick={() => void remove(todo)}>
+                    {isDeleting ? <LoadingSpinner /> : <Trash2 size={16} />}
+                  </button>
                 </div>
               </article>
             );
@@ -197,7 +278,12 @@ export function TodoPage() {
       )}
 
       {editing ? (
-        <Modal title={editing === "new" ? "新建 Todo" : "编辑 Todo"} onClose={() => setEditing(null)}>
+        <Modal
+          title={editing === "new" ? "新建 Todo" : "编辑 Todo"}
+          onClose={() => {
+            if (busyId !== "form") setEditing(null);
+          }}
+        >
           <form className="form-stack" onSubmit={saveTodo}>
             {error ? <div className="error-banner">{error}</div> : null}
             <div className="field">
@@ -223,8 +309,50 @@ export function TodoPage() {
               </div>
             </div>
             <div className="form-actions">
-              <button className="button" type="button" onClick={() => setEditing(null)}>取消</button>
-              <button className="button primary" disabled={busyId === "form"} type="submit">{busyId === "form" ? "保存中..." : "保存"}</button>
+              <button className="button" disabled={busyId === "form"} type="button" onClick={() => setEditing(null)}>取消</button>
+              <button className="button primary" disabled={busyId === "form"} type="submit">
+                {busyId === "form" ? <><LoadingSpinner /> 保存中...</> : "保存"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {noteTodo ? (
+        <Modal
+          title={noteTodo.note ? "编辑 Todo 备注" : "添加 Todo 备注"}
+          onClose={() => {
+            if (busyId !== `note:${noteTodo.id}`) setNoteTodo(null);
+          }}
+        >
+          <form className="form-stack" onSubmit={saveNote}>
+            {error ? <div className="error-banner">{error}</div> : null}
+            <div className="field">
+              <label>{noteTodo.title}</label>
+              <RichNoteEditor value={noteValue} onChange={setNoteValue} onError={setError} />
+            </div>
+            <div className="form-actions">
+              <button
+                className="button"
+                disabled={busyId === `note:${noteTodo.id}`}
+                onClick={() => setNoteTodo(null)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button primary"
+                disabled={busyId === `note:${noteTodo.id}`}
+                type="submit"
+              >
+                {busyId === `note:${noteTodo.id}` ? (
+                  <>
+                    <LoadingSpinner /> 保存中...
+                  </>
+                ) : (
+                  "保存备注"
+                )}
+              </button>
             </div>
           </form>
         </Modal>

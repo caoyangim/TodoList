@@ -79,11 +79,19 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 
 | 表 | 用途 |
 |---|---|
-| `Todo` | Todo 数据 |
+| `Todo` | Todo 基础信息、完成状态与富备注 |
 | `SopTemplate` | SOP 模板 |
 | `SopTemplateNode` | 模板节点及父子关系 |
-| `SopRun` | 版本化执行实例和模板快照 |
-| `SopRunNode` | 执行节点快照、状态和时间 |
+| `SopRun` | 独立标题、版本化执行实例和模板快照 |
+| `SopRunNode` | 执行节点快照、状态、备注和时间 |
+| `NoteImage` | 富备注图片元数据 |
+
+`SopRun.archivedAt` 用于区分未归档与已归档执行；删除 `SopRun` 时数据库外键会级联
+删除对应 `SopRunNode`。
+
+富备注 HTML 正文和图片 ID 保存在业务表 JSON 字段中，图片文件位于
+`data/note-images/`，`NoteImage` 保存 MIME 类型、扩展名和大小。服务层使用 HTML
+白名单清洗正文，所有备注 UI 复用 `RichNoteEditor`。
 
 ## 4. 数据流
 
@@ -123,6 +131,7 @@ PATCH 节点状态
 ## 5. 前端结构
 
 - 左侧导航：Todo、SOP 模板、SOP 执行。
+- SOP 执行首页先以网格展示模板，进入模板后按未归档与已归档展示执行记录。
 - 760px 以下切换为顶部导航。
 - 视觉变量和主要组件样式位于 `globals.css`。
 - 通用弹窗使用 `Modal`。
@@ -134,7 +143,6 @@ PATCH 节点状态
 适合继续保持当前结构的功能：
 
 - Todo 搜索与筛选。
-- 节点备注。
 - 模板复制。
 - 简单导出和备份。
 

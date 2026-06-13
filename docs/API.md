@@ -86,6 +86,25 @@ PATCH /api/todos/:id/completion
 }
 ```
 
+### 更新 Todo 备注
+
+```http
+PATCH /api/todos/:id/note
+```
+
+```json
+{
+  "note": {
+    "html": "<p>查看 <a href=\"https://example.com\">发布文档</a></p>",
+    "imageIds": ["image-id"]
+  }
+}
+```
+
+- Todo 备注与 SOP 节点备注使用相同的富文本、链接白名单和图片规则。
+- 正文和图片都为空，或提交 `null`，会清空备注。
+- 更新备注不改变 Todo 完成状态。
+
 ## 3. SOP 模板
 
 ```text
@@ -142,9 +161,10 @@ GET /api/runs/:id
 
 - 模板快照。
 - `NOT_STARTED | IN_PROGRESS | COMPLETED` 状态。
-- 叶子节点进度。
+- 完成目标节点进度；存在必选叶子时排除可选叶子。
 - 必选节点进度。
 - 节点父子关系和时间字段。
+- `archivedAt` 归档时间。
 
 ### 创建
 
@@ -155,14 +175,42 @@ POST /api/runs
 ```json
 {
   "templateId": "template-id",
+  "title": "Android 6 月正式版发布",
   "version": "1.0.0"
 }
 ```
+
+`title` 必填，最长 100 个字符。
 
 常见冲突：
 
 - `TEMPLATE_EMPTY`：模板没有节点。
 - `VERSION_EXISTS`：同一模板版本号重复。
+
+### 归档、恢复和删除
+
+```text
+PATCH  /api/runs/:id
+DELETE /api/runs/:id
+```
+
+归档或恢复请求：
+
+```json
+{
+  "archived": true
+}
+```
+
+`archived: false` 表示恢复。删除成功返回 `204`，执行节点随执行实例级联删除。
+
+修改执行标题同样使用 `PATCH /api/runs/:id`：
+
+```json
+{
+  "title": "Android 6 月补丁版发布"
+}
+```
 
 ### 更新节点完成状态
 
@@ -181,3 +229,37 @@ PATCH /api/runs/:id/nodes/:nodeId/completion
 常见冲突：
 
 - `PARENT_NODE_READ_ONLY`：尝试直接修改父节点。
+
+### 更新节点备注
+
+```http
+PATCH /api/runs/:id/nodes/:nodeId/note
+```
+
+```json
+  {
+    "note": {
+      "html": "<p>已核对<strong>日志</strong>，查看 <a href=\"https://example.com\">详情</a></p>",
+      "imageIds": ["image-id"]
+    }
+  }
+```
+
+- 父节点和叶子节点都支持备注。
+- 正文使用经过服务端白名单清洗的 HTML，支持段落、加粗、斜体、下划线、删除线、
+  列表、引用、代码和链接。
+- 链接仅允许 `http`、`https` 和 `mailto` 协议，并统一在新窗口打开。
+- 正文可见文字最多 2000 个字符，每条备注最多 10 张图片。
+- 正文和图片都为空，或提交 `null`，会清空备注。
+- 该接口返回更新后的完整执行 DTO，不改变节点完成状态和进度。
+
+### 备注图片
+
+```text
+POST   /api/note-images
+GET    /api/note-images/:id
+DELETE /api/note-images/:id
+```
+
+上传使用 `multipart/form-data`，文件字段名为 `file`。支持 PNG、JPEG、WebP 和 GIF，
+单张图片最大 5 MB。上传成功返回可写入备注 `imageIds` 的图片 DTO。

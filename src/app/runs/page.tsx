@@ -1,5 +1,9 @@
 import { RunListPage } from "@/features/runs/run-list-page";
 
-export default function Page() {
-  return <RunListPage />;
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ templateId?: string }>;
+}) {
+  return <RunListPage initialTemplateId={(await searchParams).templateId ?? null} />;
 }

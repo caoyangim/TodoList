@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, ClipboardList, Plus, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { apiRequest } from "@/shared/api-client";
 import { TemplateDto } from "@/shared/types/models";
 
@@ -13,15 +14,15 @@ export function TemplateListPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError("");
     try {
       setTemplates(await apiRequest<TemplateDto[]>("/api/templates"));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "模板加载失败");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
@@ -35,7 +36,7 @@ export function TemplateListPage() {
     setError("");
     try {
       await apiRequest(`/api/templates/${template.id}`, { method: "DELETE" });
-      await load();
+      await load(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "删除失败");
     } finally {
@@ -55,7 +56,7 @@ export function TemplateListPage() {
 
       {error ? <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div> : null}
       {loading ? (
-        <div className="loading">正在加载...</div>
+        <LoadingState label="正在加载模板..." />
       ) : templates.length === 0 ? (
         <EmptyState
           title="还没有 SOP 模板"
@@ -74,11 +75,11 @@ export function TemplateListPage() {
                 <button
                   aria-label="删除模板"
                   className="button ghost icon-only"
-                  disabled={busyId === template.id}
+                  disabled={template.hasRuns || busyId === template.id}
                   onClick={() => void remove(template)}
                   title={template.hasRuns ? "已有执行记录，不能删除" : "删除模板"}
                 >
-                  <Trash2 size={16} />
+                  {busyId === template.id ? <LoadingSpinner /> : <Trash2 size={16} />}
                 </button>
               </div>
               {template.description ? <p className="item-description">{template.description}</p> : null}
