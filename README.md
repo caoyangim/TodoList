@@ -2,6 +2,15 @@
 
 个人使用的本地 Todo 与版本化 SOP 管理工具。
 
+## 文档导航
+
+- [AI 与新会话接管指南](AGENTS.md)
+- [架构说明](docs/ARCHITECTURE.md)
+- [业务规则](docs/BUSINESS_RULES.md)
+- [REST API](docs/API.md)
+- [开发规范](docs/DEVELOPMENT.md)
+- [早期开发计划](TodoFlow_开发计划书_V1.0.md)
+
 SOP 节点支持两层父子结构和必选/可选标记：
 
 - 叶子节点可以标记为必须或可选。
@@ -70,6 +79,9 @@ React 页面 → REST API → Service → SQLite
 `prisma/schema.prisma` 保留为数据模型参考。当前开发网络无法访问 Prisma CLI
 所需的引擎下载地址，因此 V1 使用 `better-sqlite3` 初始化并访问同一套表结构；
 REST 和 Service 边界不受影响，后续可以在数据层内替换 ORM。
+
+详细的数据流、目录职责和扩展边界见
+[架构说明](docs/ARCHITECTURE.md)。
 
 ## REST API
 
