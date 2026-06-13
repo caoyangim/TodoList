@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum TodoPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Todo {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  priority    TodoPriority @default(MEDIUM)
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([completedAt])
+  @@index([dueAt])
+}
+
+model SopTemplate {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  nodes       SopTemplateNode[]
+  runs        SopRun[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model SopTemplateNode {
+  id          String      @id @default(cuid())
+  templateId  String
+  template    SopTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sortOrder   Int
+  isRequired  Boolean     @default(true)
+  parentId    String?
+  parent      SopTemplateNode?  @relation("TemplateNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children    SopTemplateNode[] @relation("TemplateNodeChildren")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([templateId, sortOrder])
+}
+
+model SopRun {
+  id                          String       @id @default(cuid())
+  templateId                  String
+  template                    SopTemplate  @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  templateNameSnapshot        String
+  templateDescriptionSnapshot String?
+  version                     String
+  startedAt                   DateTime?
+  completedAt                 DateTime?
+  nodes                       SopRunNode[]
+  createdAt                   DateTime     @default(now())
+  updatedAt                   DateTime     @updatedAt
+
+  @@unique([templateId, version])
+  @@index([completedAt])
+}
+
+model SopRunNode {
+  id                  String   @id @default(cuid())
+  runId               String
+  run                  SopRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  nameSnapshot        String
+  descriptionSnapshot String?
+  sortOrder           Int
+  isRequired          Boolean  @default(true)
+  parentId            String?
+  parent              SopRunNode?  @relation("RunNodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  children            SopRunNode[] @relation("RunNodeChildren")
+  completedAt         DateTime?
+  firstCompletedAt    DateTime?
+  lastModifiedAt      DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([runId, sortOrder])
+}
