@@ -18,7 +18,8 @@ model Todo {
   title       String
   description String?
   note        String?
-  priority    TodoPriority @default(MEDIUM)
+  timePriority TodoPriority @default(MEDIUM)
+  importancePriority TodoPriority @default(MEDIUM)
   dueAt       DateTime?
   completedAt DateTime?
   createdAt   DateTime     @default(now())

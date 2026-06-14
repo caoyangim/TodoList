@@ -3,6 +3,7 @@
 import {
   Bold,
   ClipboardPaste,
+  File,
   ImagePlus,
   Italic,
   Link2,
@@ -17,10 +18,11 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LoadingSpinner } from "@/components/loading";
-import { uploadNoteImage } from "@/shared/note-image-client";
-import { NoteContentDto, NoteImageDto } from "@/shared/types/models";
+import { uploadNoteFile } from "@/shared/note-file-client";
+import { formatFileSize } from "@/shared/format";
+import { NoteContentDto, NoteFileDto } from "@/shared/types/models";
 
-const maxImages = 10;
+const maxFiles = 10;
 const maxTextLength = 2000;
 
 type EditorCommand =
@@ -217,27 +219,26 @@ export function RichNoteEditor({
   }
 
   async function upload(files: File[]) {
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) return;
-    if (value.images.length + imageFiles.length > maxImages) {
-      onError(`每条备注最多包含 ${maxImages} 张图片`);
+    if (files.length === 0) return;
+    if (value.files.length + files.length > maxFiles) {
+      onError(`每条备注最多包含 ${maxFiles} 个文件`);
       return;
     }
     setUploading(true);
     onError("");
     try {
-      const images = await Promise.all(imageFiles.map(uploadNoteImage));
-      onChange({ ...value, images: [...value.images, ...images] });
+      const uploaded = await Promise.all(files.map(uploadNoteFile));
+      onChange({ ...value, files: [...value.files, ...uploaded] });
     } catch (error) {
-      onError(error instanceof Error ? error.message : "图片上传失败");
+      onError(error instanceof Error ? error.message : "文件上传失败");
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
     }
   }
 
-  function removeImage(image: NoteImageDto) {
-    onChange({ ...value, images: value.images.filter((item) => item.id !== image.id) });
+  function removeFile(file: NoteFileDto) {
+    onChange({ ...value, files: value.files.filter((item) => item.id !== file.id) });
   }
 
   const toolbarButtons: Array<{
@@ -370,7 +371,7 @@ export function RichNoteEditor({
             .filter((item) => item.kind === "file")
             .map((item) => item.getAsFile())
             .filter((file): file is File => Boolean(file));
-          if (files.some((file) => file.type.startsWith("image/"))) {
+          if (files.length > 0) {
             event.preventDefault();
             void upload(files);
           }
@@ -379,44 +380,61 @@ export function RichNoteEditor({
         role="textbox"
         suppressContentEditableWarning
       />
-      {value.images.length > 0 ? (
-        <div className="note-image-grid">
-          {value.images.map((image) => (
-            <figure className="note-image-preview" key={image.id}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="备注图片" src={image.url} />
-              <button
-                aria-label="移除图片"
-                className="button icon-only note-image-remove"
-                onClick={() => removeImage(image)}
-                type="button"
-              >
-                <Trash2 size={14} />
-              </button>
-            </figure>
-          ))}
+      {value.files.length > 0 ? (
+        <div className="note-file-grid">
+          {value.files.map((file) =>
+            file.mimeType.startsWith("image/") ? (
+              <figure className="note-image-preview" key={file.id}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt="备注图片" src={file.url} />
+                <button
+                  aria-label="移除文件"
+                  className="button icon-only note-image-remove"
+                  onClick={() => removeFile(file)}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </figure>
+            ) : (
+              <div className="note-file-card" key={file.id}>
+                <File size={24} />
+                <span className="note-file-card-name" title={file.originalName}>
+                  {file.originalName}
+                </span>
+                <span className="note-file-card-size">{formatFileSize(file.size)}</span>
+                <button
+                  aria-label="移除文件"
+                  className="button icon-only note-image-remove"
+                  onClick={() => removeFile(file)}
+                  type="button"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ),
+          )}
         </div>
       ) : null}
       <div className="rich-note-footer">
         <span className={`field-hint${textLength > maxTextLength ? " error-text" : ""}`}>
-          {textLength} / {maxTextLength} · {value.images.length} / {maxImages} 张图片
+          {textLength} / {maxTextLength} · {value.files.length} / {maxFiles} 个文件
         </span>
         <div className="rich-note-tools">
           <span className="paste-hint">
-            <ClipboardPaste size={13} /> 支持粘贴图片
+            <ClipboardPaste size={13} /> 支持粘贴文件
           </span>
           <button
             className="button"
-            disabled={uploading || value.images.length >= maxImages}
+            disabled={uploading || value.files.length >= maxFiles}
             onClick={() => inputRef.current?.click()}
             type="button"
           >
             {uploading ? <LoadingSpinner /> : <ImagePlus size={15} />}
-            {uploading ? "上传中..." : "选择图片"}
+            {uploading ? "上传中..." : "选择文件"}
           </button>
           <input
             ref={inputRef}
-            accept="image/png,image/jpeg,image/webp,image/gif"
             hidden
             multiple
             onChange={(event) => void upload(Array.from(event.target.files ?? []))}

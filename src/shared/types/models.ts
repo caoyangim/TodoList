@@ -5,7 +5,8 @@ export type TodoDto = {
   title: string;
   description: string | null;
   note: NoteContentDto | null;
-  priority: TodoPriority;
+  timePriority: TodoPriority;
+  importancePriority: TodoPriority;
   dueAt: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -34,16 +35,20 @@ export type TemplateDto = {
 
 export type RunStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
 
-export type NoteImageDto = {
+/** @deprecated Use NoteFileDto instead */
+export type NoteImageDto = NoteFileDto;
+
+export type NoteFileDto = {
   id: string;
   url: string;
   mimeType: string;
   size: number;
+  originalName: string;
 };
 
 export type NoteContentDto = {
   html: string;
-  images: NoteImageDto[];
+  files: NoteFileDto[];
 };
 
 export type RunNodeDto = {

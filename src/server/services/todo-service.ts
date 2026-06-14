@@ -5,7 +5,7 @@ import {
   plainTextToNoteHtml,
   sanitizeNoteHtml,
 } from "@/server/services/note-content-service";
-import { noteImageService } from "@/server/services/note-image-service";
+import { noteFileService } from "@/server/services/note-file-service";
 import {
   todoInputSchema,
   todoNoteSchema,
@@ -14,8 +14,7 @@ import {
 } from "@/shared/schemas/todo";
 import { NoteContentDto, TodoDto } from "@/shared/types/models";
 
-type TodoRow = Omit<TodoDto, "priority" | "note"> & {
-  priority: TodoDto["priority"];
+type TodoRow = Omit<TodoDto, "note"> & {
   note: string | null;
 };
 
@@ -25,17 +24,23 @@ function getTodoRow(id: string) {
 
 function parseNote(value: string | null): NoteContentDto | null {
   if (!value) return null;
-  let parsed: { html?: string; text?: string; imageIds: string[] };
+  let parsed: { html?: string; text?: string; fileIds?: string[]; imageIds?: string[] };
   try {
-    parsed = JSON.parse(value) as { html?: string; text?: string; imageIds: string[] };
+    parsed = JSON.parse(value) as {
+      html?: string;
+      text?: string;
+      fileIds?: string[];
+      imageIds?: string[];
+    };
   } catch {
-    return { html: plainTextToNoteHtml(value), images: [] };
+    return { html: plainTextToNoteHtml(value), files: [] };
   }
+  const ids = parsed.fileIds ?? parsed.imageIds ?? [];
   return {
     html: parsed.html
       ? sanitizeNoteHtml(parsed.html).html
       : plainTextToNoteHtml(parsed.text ?? ""),
-    images: noteImageService.getMany(parsed.imageIds),
+    files: noteFileService.getMany(ids),
   };
 }
 
@@ -73,7 +78,8 @@ export const todoService = {
       title: data.title,
       description: data.description,
       note: null,
-      priority: data.priority,
+      timePriority: data.timePriority,
+      importancePriority: data.importancePriority,
       dueAt: data.dueAt?.toISOString() ?? null,
       completedAt: null,
       createdAt: now,
@@ -81,10 +87,10 @@ export const todoService = {
     };
     db.prepare(`
       INSERT INTO Todo (
-        id, title, description, note, priority, dueAt, completedAt, createdAt, updatedAt
+        id, title, description, note, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
       )
       VALUES (
-        @id, @title, @description, @note, @priority, @dueAt, @completedAt, @createdAt, @updatedAt
+        @id, @title, @description, @note, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
       )
     `).run(todo);
     return todo;
@@ -100,7 +106,8 @@ export const todoService = {
       updatedAt: new Date().toISOString(),
     };
     db.prepare(`
-      UPDATE Todo SET title=@title, description=@description, priority=@priority,
+      UPDATE Todo SET title=@title, description=@description, priority=@importancePriority,
+      timePriority=@timePriority, importancePriority=@importancePriority,
       dueAt=@dueAt, updatedAt=@updatedAt WHERE id=@id
     `).run(next);
     return next;
@@ -120,10 +127,10 @@ export const todoService = {
       throw new AppError("NOTE_TOO_LONG", "备注文字不能超过 2000 个字符", 400);
     }
     const note =
-      data.note && content && (!content.isEmpty || data.note.imageIds.length > 0)
+      data.note && content && (!content.isEmpty || data.note.fileIds.length > 0)
         ? JSON.stringify({
             html: content.html,
-            imageIds: noteImageService.getMany(data.note.imageIds).map((image) => image.id),
+            fileIds: noteFileService.getMany(data.note.fileIds).map((f) => f.id),
           })
         : null;
     const updatedAt = new Date().toISOString();

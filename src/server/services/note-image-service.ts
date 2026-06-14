@@ -35,6 +35,7 @@ function toDto(row: NoteImageRow): NoteImageDto {
     url: `/api/note-images/${row.id}`,
     mimeType: row.mimeType,
     size: row.size,
+    originalName: `${row.id}.${row.extension}`,
   };
 }
 

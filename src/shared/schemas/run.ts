@@ -20,7 +20,7 @@ export const runNodeNoteSchema = z.object({
   note: z
     .object({
       html: z.string().max(20000, "备注富文本内容过长"),
-      imageIds: z.array(z.string().uuid()).max(10, "每条备注最多包含 10 张图片"),
+      fileIds: z.array(z.string().uuid()).max(10, "每条备注最多包含 10 个文件"),
     })
     .nullable(),
 });

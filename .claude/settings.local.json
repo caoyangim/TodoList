@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sqlite3 D:/Code/TodoList/data/*.db \".tables\")",
+      "Bash(git *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)",
+      "Bash(npm run *)",
+      "Bash(curl *)",
+      "Bash(npx next *)",
+      "Bash(tasklist)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 30912 //F)",
+      "Bash(rm -rf .next)",
+      "Bash(taskkill /F /PID 29852)",
+      "Bash(cmd //c \"taskkill /F /PID 29852\")"
+    ]
+  }
+}

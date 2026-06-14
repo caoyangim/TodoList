@@ -541,7 +541,8 @@ a {
   color: #b3261e;
 }
 
-.note-image-grid {
+.note-image-grid,
+.note-file-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
@@ -558,7 +559,8 @@ a {
 }
 
 .note-image-preview img,
-.note-image-grid.display img {
+.note-image-grid.display img,
+.note-file-grid.display img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -573,15 +575,61 @@ a {
   background: rgb(255 255 255 / 92%);
 }
 
-.note-image-grid.display {
+.note-image-grid.display,
+.note-file-grid.display {
   margin-top: 9px;
 }
 
-.note-image-grid.display a {
+.note-image-grid.display a,
+.note-file-grid.display a {
   overflow: hidden;
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
   border-radius: 7px;
+}
+
+.note-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  background: #f9f9f9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  position: relative;
+  text-align: center;
+  min-height: 100px;
+  justify-content: center;
+}
+
+.note-file-card.display {
+  text-decoration: none;
+  color: var(--text);
+  aspect-ratio: auto;
+  overflow: hidden;
+  transition: background 0.15s;
+}
+
+.note-file-card.display:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.note-file-card-name {
+  font-size: 12px;
+  word-break: break-all;
+  line-height: 1.3;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-file-card-size {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .rich-note-footer {
@@ -1098,7 +1146,8 @@ a {
     justify-content: flex-start;
   }
 
-  .note-image-grid {
+  .note-image-grid,
+  .note-file-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

@@ -5,12 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const testDir = path.resolve(process.cwd(), "data-test");
 const testDb = path.join(testDir, "todoflow-test.db");
 process.env.DATABASE_URL = `file:${testDb}`;
-process.env.NOTE_IMAGE_DIR = path.join(testDir, "note-images");
+process.env.NOTE_FILE_DIR = path.join(testDir, "note-files");
 
 let todoService: typeof import("@/server/services/todo-service").todoService;
 let templateService: typeof import("@/server/services/template-service").templateService;
 let runService: typeof import("@/server/services/run-service").runService;
-let noteImageService: typeof import("@/server/services/note-image-service").noteImageService;
+let noteFileService: typeof import("@/server/services/note-file-service").noteFileService;
 let db: typeof import("@/server/db").db;
 
 beforeAll(async () => {
@@ -19,7 +19,7 @@ beforeAll(async () => {
   ({ todoService } = await import("@/server/services/todo-service"));
   ({ templateService } = await import("@/server/services/template-service"));
   ({ runService } = await import("@/server/services/run-service"));
-  ({ noteImageService } = await import("@/server/services/note-image-service"));
+  ({ noteFileService } = await import("@/server/services/note-file-service"));
 });
 
 afterAll(() => {
@@ -32,10 +32,13 @@ describe("Todo service", () => {
     const todo = await todoService.create({
       title: "验证本地数据",
       description: "",
-      priority: "HIGH",
+      timePriority: "HIGH",
+      importancePriority: "MEDIUM",
       dueAt: null,
     });
     expect(todo.completedAt).toBeNull();
+    expect(todo.timePriority).toBe("HIGH");
+    expect(todo.importancePriority).toBe("MEDIUM");
 
     const completed = await todoService.setCompletion(todo.id, true);
     expect(completed.completedAt).toBeTruthy();
@@ -45,7 +48,7 @@ describe("Todo service", () => {
   });
 
   it("stores rich Todo notes without changing completion", async () => {
-    const image = await noteImageService.create(
+    const file = await noteFileService.create(
       new File([new Uint8Array([137, 80, 78, 71])], "todo-note.png", {
         type: "image/png",
       }),
@@ -53,25 +56,26 @@ describe("Todo service", () => {
     const todo = await todoService.create({
       title: "补充发布说明",
       description: "",
-      priority: "MEDIUM",
+      timePriority: "MEDIUM",
+      importancePriority: "HIGH",
       dueAt: null,
     });
 
     const noted = await todoService.setNote(todo.id, {
       note: {
         html: '<p>查看 <a href="https://example.com">发布文档</a><script>alert(1)</script></p>',
-        imageIds: [image.id],
+        fileIds: [file.id],
       },
     });
     expect(noted.note).toEqual({
       html:
         '<p>查看 <a href="https://example.com" target="_blank" rel="noreferrer noopener">发布文档</a></p>',
-      images: [image],
+      files: [file],
     });
     expect(noted.completedAt).toBeNull();
 
     const cleared = await todoService.setNote(todo.id, {
-      note: { html: "<p><br></p>", imageIds: [] },
+      note: { html: "<p><br></p>", fileIds: [] },
     });
     expect(cleared.note).toBeNull();
   });
@@ -248,33 +252,33 @@ describe("SOP service", () => {
     const noted = await runService.setNodeNote(run.id, node.id, {
       note: {
         html: "<p>已核对<strong>日志</strong>，查看 <a href=\"https://example.com\">详情</a></p>",
-        imageIds: [],
+        fileIds: [],
       },
     });
     expect(noted.nodes[0].note).toEqual({
       html:
         '<p>已核对<strong>日志</strong>，查看 <a href="https://example.com" target="_blank" rel="noreferrer noopener">详情</a></p>',
-      images: [],
+      files: [],
     });
     expect(noted.nodes[0].completedAt).toBeNull();
     expect(noted.status).toBe("NOT_STARTED");
 
     const cleared = await runService.setNodeNote(run.id, node.id, {
-      note: { html: "<p><br></p>", imageIds: [] },
+      note: { html: "<p><br></p>", fileIds: [] },
     });
     expect(cleared.nodes[0].note).toBeNull();
     expect(cleared.nodes[0].lastModifiedAt).toBeNull();
 
     await expect(
       runService.setNodeNote(run.id, node.id, {
-        note: { html: `<p>${"a".repeat(2001)}</p>`, imageIds: [] },
+        note: { html: `<p>${"a".repeat(2001)}</p>`, fileIds: [] },
       }),
     ).rejects.toMatchObject({ code: "NOTE_TOO_LONG" });
 
     const sanitized = await runService.setNodeNote(run.id, node.id, {
       note: {
         html: '<p onclick="alert(1)">安全<script>alert(1)</script><a href="javascript:alert(1)">链接</a></p>',
-        imageIds: [],
+        fileIds: [],
       },
     });
     expect(sanitized.nodes[0].note?.html).toBe(
@@ -282,29 +286,29 @@ describe("SOP service", () => {
     );
   });
 
-  it("stores pasted note images and returns image references in notes", async () => {
-    const image = await noteImageService.create(
+  it("stores pasted note files and returns file references in notes", async () => {
+    const file = await noteFileService.create(
       new File([new Uint8Array([137, 80, 78, 71])], "clipboard.png", {
         type: "image/png",
       }),
     );
     const template = await templateService.create({
-      name: "图片备注流程",
+      name: "文件备注流程",
       description: "",
       nodes: [{ name: "截图确认", description: "", sortOrder: 1 }],
     });
     const run = await runService.create({
       templateId: template.id,
-      title: "图片备注执行",
+      title: "文件备注执行",
       version: "1.0.0",
     });
     const updated = await runService.setNodeNote(run.id, run.nodes[0].id, {
-      note: { html: "<p>见截图</p>", imageIds: [image.id] },
+      note: { html: "<p>见截图</p>", fileIds: [file.id] },
     });
 
     expect(updated.nodes[0].note?.html).toBe("<p>见截图</p>");
-    expect(updated.nodes[0].note?.images).toEqual([image]);
-    expect((await noteImageService.get(image.id)).bytes.length).toBe(4);
+    expect(updated.nodes[0].note?.files).toEqual([file]);
+    expect((await noteFileService.get(file.id)).bytes.length).toBe(4);
   });
 
   it("creates and updates an independent run title", async () => {

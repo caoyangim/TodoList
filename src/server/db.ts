@@ -20,6 +20,8 @@ db.exec(`
     description TEXT,
     note TEXT,
     priority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(priority IN ('LOW', 'MEDIUM', 'HIGH')),
+    timePriority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(timePriority IN ('LOW', 'MEDIUM', 'HIGH')),
+    importancePriority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(importancePriority IN ('LOW', 'MEDIUM', 'HIGH')),
     dueAt TEXT,
     completedAt TEXT,
     createdAt TEXT NOT NULL,
@@ -73,6 +75,15 @@ db.exec(`
     createdAt TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS NoteFile (
+    id TEXT PRIMARY KEY,
+    mimeType TEXT NOT NULL,
+    extension TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    originalName TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS SopRunNode (
     id TEXT PRIMARY KEY,
     runId TEXT NOT NULL,
@@ -111,6 +122,16 @@ ensureColumn("SopRunNode", "firstCompletedAt", "TEXT");
 ensureColumn("SopRunNode", "lastModifiedAt", "TEXT");
 ensureColumn("SopRunNode", "note", "TEXT");
 ensureColumn("Todo", "note", "TEXT");
+ensureColumn(
+  "Todo",
+  "timePriority",
+  "TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(timePriority IN ('LOW', 'MEDIUM', 'HIGH'))",
+);
+ensureColumn(
+  "Todo",
+  "importancePriority",
+  "TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(importancePriority IN ('LOW', 'MEDIUM', 'HIGH'))",
+);
 ensureColumn("SopRun", "archivedAt", "TEXT");
 ensureColumn("SopRun", "title", "TEXT");
 
@@ -119,6 +140,16 @@ db.exec(`
 `);
 
 db.exec(`
+  UPDATE Todo
+  SET timePriority = priority
+  WHERE priority IS NOT NULL
+    AND (timePriority IS NULL OR (timePriority = 'MEDIUM' AND priority != 'MEDIUM'));
+
+  UPDATE Todo
+  SET importancePriority = priority
+  WHERE priority IS NOT NULL
+    AND (importancePriority IS NULL OR (importancePriority = 'MEDIUM' AND priority != 'MEDIUM'));
+
   UPDATE SopRun
   SET title = templateNameSnapshot || ' / ' || version
   WHERE title IS NULL OR TRIM(title) = '';
@@ -131,5 +162,67 @@ db.exec(`
   SET lastModifiedAt = completedAt
   WHERE lastModifiedAt IS NULL AND completedAt IS NOT NULL;
 `);
+
+// Migrate NoteImage -> NoteFile
+const noteFileCount = (db.prepare("SELECT COUNT(*) AS count FROM NoteFile").get() as { count: number })
+  .count;
+if (noteFileCount === 0) {
+  const oldImages = db.prepare("SELECT * FROM NoteImage").all() as {
+    id: string;
+    mimeType: string;
+    extension: string;
+    size: number;
+    createdAt: string;
+  }[];
+  if (oldImages.length > 0) {
+    const oldDir = path.resolve(process.cwd(), "data", "note-images");
+    const newDir = path.resolve(process.cwd(), "data", "note-files");
+    fs.mkdirSync(newDir, { recursive: true });
+    const insert = db.prepare(
+      "INSERT INTO NoteFile (id, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+    );
+    const insertMany = db.transaction(() => {
+      for (const row of oldImages) {
+        insert.run(row.id, row.mimeType, row.extension, row.size, `${row.id}.${row.extension}`, row.createdAt);
+        const oldPath = path.join(oldDir, `${row.id}.${row.extension}`);
+        const newPath = path.join(newDir, `${row.id}.${row.extension}`);
+        if (fs.existsSync(oldPath)) {
+          try {
+            fs.cpSync(oldPath, newPath);
+          } catch {
+            // skip files that can't be copied
+          }
+        }
+      }
+    });
+    insertMany();
+
+    // Migrate imageIds -> fileIds in note JSON
+    const updateNotes = db.transaction(() => {
+      for (const table of ["Todo", "SopRunNode"]) {
+        const rows = db.prepare(`SELECT id, note FROM ${table} WHERE note IS NOT NULL`).all() as {
+          id: string;
+          note: string;
+        }[];
+        for (const row of rows) {
+          try {
+            const parsed = JSON.parse(row.note);
+            if (parsed.imageIds && !parsed.fileIds) {
+              parsed.fileIds = parsed.imageIds;
+              delete parsed.imageIds;
+              db.prepare(`UPDATE ${table} SET note = ? WHERE id = ?`).run(
+                JSON.stringify(parsed),
+                row.id,
+              );
+            }
+          } catch {
+            // skip malformed JSON
+          }
+        }
+      }
+    });
+    updateNotes();
+  }
+}
 
 if (process.env.NODE_ENV !== "production") globalForDb.todoFlowDb = db;

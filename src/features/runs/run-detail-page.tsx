@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Circle,
   CircleCheckBig,
+  File,
   FolderTree,
   MessageSquare,
   Pencil,
@@ -21,6 +22,7 @@ import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { RichNoteEditor } from "@/components/rich-note-editor";
 import { apiRequest } from "@/shared/api-client";
 import { NoteContentDto, RunDto, RunNodeDto } from "@/shared/types/models";
+import { formatFileSize } from "@/shared/format";
 
 const statusText = {
   NOT_STARTED: "未开始",
@@ -38,7 +40,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
   const [titleSaving, setTitleSaving] = useState(false);
   const [pendingUncheck, setPendingUncheck] = useState<RunNodeDto | null>(null);
   const [noteNode, setNoteNode] = useState<RunNodeDto | null>(null);
-  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", images: [] });
+  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", files: [] });
   const [noteSaving, setNoteSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [expandedParentIds, setExpandedParentIds] = useState<Set<string>>(new Set());
@@ -154,7 +156,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
 
   function openNote(node: RunNodeDto) {
     setNoteNode(node);
-    setNoteValue(node.note ?? { html: "", images: [] });
+    setNoteValue(node.note ?? { html: "", files: [] });
     setError("");
   }
 
@@ -170,7 +172,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
           body: JSON.stringify({
             note: {
               html: noteValue.html,
-              imageIds: noteValue.images.map((image) => image.id),
+              fileIds: noteValue.files.map((f) => f.id),
             },
           }),
         }),
@@ -264,14 +266,30 @@ export function RunDetailPage({ runId }: { runId: string }) {
                       dangerouslySetInnerHTML={{ __html: node.note.html }}
                     />
                   ) : null}
-                  {node.note.images.length > 0 ? (
-                    <div className="note-image-grid display">
-                      {node.note.images.map((image) => (
-                          <a href={image.url} key={image.id} target="_blank" rel="noreferrer">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img alt="节点备注图片" src={image.url} />
-                        </a>
-                      ))}
+                  {node.note.files.length > 0 ? (
+                    <div className="note-file-grid display">
+                      {node.note.files.map((file) =>
+                        file.mimeType.startsWith("image/") ? (
+                          <a href={file.url} key={file.id} target="_blank" rel="noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img alt="节点备注图片" src={file.url} />
+                          </a>
+                        ) : (
+                          <a
+                            href={file.url}
+                            key={file.id}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="note-file-card display"
+                          >
+                            <File size={20} />
+                            <span className="note-file-card-name" title={file.originalName}>
+                              {file.originalName}
+                            </span>
+                            <span className="note-file-card-size">{formatFileSize(file.size)}</span>
+                          </a>
+                        ),
+                      )}
                     </div>
                   ) : null}
                 </div>

@@ -61,7 +61,8 @@ Content-Type: application/json
 {
   "title": "完成发布",
   "description": "发布并验证",
-  "priority": "HIGH",
+  "timePriority": "HIGH",
+  "importancePriority": "MEDIUM",
   "dueAt": "2026-06-13T12:00:00.000Z"
 }
 ```

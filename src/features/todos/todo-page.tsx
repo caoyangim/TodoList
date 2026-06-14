@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Edit3, MessageSquare, Plus, Trash2 } from "lucide-react";
+import { Check, Edit3, File, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/shared/api-client";
 import { NoteContentDto, TodoDto, TodoPriority } from "@/shared/types/models";
+import { formatFileSize } from "@/shared/format";
 import { EmptyState } from "@/components/empty-state";
 import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { Modal } from "@/components/modal";
@@ -13,12 +14,19 @@ type Status = "pending" | "completed" | "all";
 type TodoForm = {
   title: string;
   description: string;
-  priority: TodoPriority;
+  timePriority: TodoPriority;
+  importancePriority: TodoPriority;
   dueAt: string;
 };
 
-const emptyForm: TodoForm = { title: "", description: "", priority: "MEDIUM", dueAt: "" };
-const priorityText = { HIGH: "高优先级", MEDIUM: "中优先级", LOW: "低优先级" };
+const emptyForm: TodoForm = {
+  title: "",
+  description: "",
+  timePriority: "MEDIUM",
+  importancePriority: "MEDIUM",
+  dueAt: "",
+};
+const priorityText = { HIGH: "高", MEDIUM: "中", LOW: "低" };
 
 function toDateInput(value: string | null) {
   if (!value) return "";
@@ -44,7 +52,7 @@ export function TodoPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoDto | null | "new">(null);
   const [noteTodo, setNoteTodo] = useState<TodoDto | null>(null);
-  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", images: [] });
+  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", files: [] });
   const [form, setForm] = useState<TodoForm>(emptyForm);
   const [error, setError] = useState("");
 
@@ -74,7 +82,8 @@ export function TodoPage() {
     setForm({
       title: todo.title,
       description: todo.description ?? "",
-      priority: todo.priority,
+      timePriority: todo.timePriority,
+      importancePriority: todo.importancePriority,
       dueAt: toDateInput(todo.dueAt),
     });
     setEditing(todo);
@@ -83,7 +92,7 @@ export function TodoPage() {
 
   function openNote(todo: TodoDto) {
     setNoteTodo(todo);
-    setNoteValue(todo.note ?? { html: "", images: [] });
+    setNoteValue(todo.note ?? { html: "", files: [] });
     setError("");
   }
 
@@ -98,7 +107,7 @@ export function TodoPage() {
         body: JSON.stringify({
           note: {
             html: noteValue.html,
-            imageIds: noteValue.images.map((image) => image.id),
+            fileIds: noteValue.files.map((f) => f.id),
           },
         }),
       });
@@ -233,26 +242,47 @@ export function TodoPage() {
                             dangerouslySetInnerHTML={{ __html: todo.note.html }}
                           />
                         ) : null}
-                        {todo.note.images.length > 0 ? (
-                          <div className="note-image-grid display">
-                            {todo.note.images.map((image) => (
-                              <a
-                                href={image.url}
-                                key={image.id}
-                                rel="noreferrer"
-                                target="_blank"
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img alt="Todo 备注图片" src={image.url} />
-                              </a>
-                            ))}
+                        {todo.note.files.length > 0 ? (
+                          <div className="note-file-grid display">
+                            {todo.note.files.map((file) =>
+                              file.mimeType.startsWith("image/") ? (
+                                <a
+                                  href={file.url}
+                                  key={file.id}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img alt="Todo 备注图片" src={file.url} />
+                                </a>
+                              ) : (
+                                <a
+                                  href={file.url}
+                                  key={file.id}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                  className="note-file-card display"
+                                >
+                                  <File size={20} />
+                                  <span className="note-file-card-name" title={file.originalName}>
+                                    {file.originalName}
+                                  </span>
+                                  <span className="note-file-card-size">{formatFileSize(file.size)}</span>
+                                </a>
+                              ),
+                            )}
                           </div>
                         ) : null}
                       </div>
                     </div>
                   ) : null}
                   <div className="item-meta">
-                    <span className={`badge ${todo.priority.toLowerCase()}`}>{priorityText[todo.priority]}</span>
+                    <span className={`badge ${todo.timePriority.toLowerCase()}`}>
+                      时间优先级：{priorityText[todo.timePriority]}
+                    </span>
+                    <span className={`badge ${todo.importancePriority.toLowerCase()}`}>
+                      重要优先级：{priorityText[todo.importancePriority]}
+                    </span>
                     {due ? <span style={{ color: due.overdue && !todo.completedAt ? "var(--danger)" : undefined }}>{due.overdue && !todo.completedAt ? "已逾期 · " : ""}{due.label}</span> : null}
                   </div>
                 </div>
@@ -296,13 +326,23 @@ export function TodoPage() {
             </div>
             <div className="form-row">
               <div className="field">
-                <label htmlFor="todo-priority">优先级</label>
-                <select id="todo-priority" className="select" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as TodoPriority })}>
+                <label htmlFor="todo-time-priority">时间优先级</label>
+                <select id="todo-time-priority" className="select" value={form.timePriority} onChange={(event) => setForm({ ...form, timePriority: event.target.value as TodoPriority })}>
                   <option value="HIGH">高</option>
                   <option value="MEDIUM">中</option>
                   <option value="LOW">低</option>
                 </select>
               </div>
+              <div className="field">
+                <label htmlFor="todo-importance-priority">重要优先级</label>
+                <select id="todo-importance-priority" className="select" value={form.importancePriority} onChange={(event) => setForm({ ...form, importancePriority: event.target.value as TodoPriority })}>
+                  <option value="HIGH">高</option>
+                  <option value="MEDIUM">中</option>
+                  <option value="LOW">低</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-row">
               <div className="field">
                 <label htmlFor="todo-due">截止日期</label>
                 <input id="todo-due" className="input" type="date" value={form.dueAt} onChange={(event) => setForm({ ...form, dueAt: event.target.value })} />
