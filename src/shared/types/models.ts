@@ -1,6 +1,16 @@
 export type TodoPriority = "LOW" | "MEDIUM" | "HIGH";
 export type TodoStatus = "PENDING" | "RESOLVED" | "COMPLETED";
 
+export type TodoRunSummaryDto = {
+  id: string;
+  title: string;
+  status: RunStatus;
+  completedCount: number;
+  totalCount: number;
+  progressPercent: number;
+  archivedAt: string | null;
+};
+
 export type TodoDto = {
   id: string;
   title: string;
@@ -12,6 +22,7 @@ export type TodoDto = {
   importancePriority: TodoPriority;
   dueAt: string | null;
   completedAt: string | null;
+  run: TodoRunSummaryDto | null;
   createdAt: string;
   updatedAt: string;
 };

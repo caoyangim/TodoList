@@ -67,6 +67,8 @@ model Todo {
   importancePriority TodoPriority @default(MEDIUM)
   dueAt              DateTime?
   completedAt        DateTime?
+  runId              String?      @unique
+  run                SopRun?      @relation(fields: [runId], references: [id], onDelete: SetNull)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -120,6 +122,7 @@ model SopRun {
   completedAt                 DateTime?
   archivedAt                  DateTime?
   nodes                       SopRunNode[]
+  todo                        Todo?
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
 

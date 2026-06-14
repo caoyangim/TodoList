@@ -6,10 +6,12 @@ export function Modal({
   title,
   children,
   onClose,
+  className = "",
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
@@ -19,7 +21,7 @@ export function Modal({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" onMouseDown={(event) => event.stopPropagation()}>
+      <div className={`modal ${className}`} onMouseDown={(event) => event.stopPropagation()}>
         <h2 className="modal-title">{title}</h2>
         {children}
       </div>

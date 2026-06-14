@@ -16,6 +16,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { Modal } from "@/components/modal";
+import { RunCreateModal } from "@/features/runs/run-create-modal";
 import { apiRequest } from "@/shared/api-client";
 import { RunDto, TemplateDto } from "@/shared/types/models";
 
@@ -45,14 +46,11 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
   const [runs, setRuns] = useState<RunDto[]>([]);
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createTemplateId, setCreateTemplateId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<RunDto | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplateId);
-  const [templateId, setTemplateId] = useState("");
-  const [title, setTitle] = useState("");
-  const [version, setVersion] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -65,7 +63,6 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
       ]);
       setRuns(runData);
       setTemplates(templateData);
-      setTemplateId((current) => current || templateData[0]?.id || "");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "执行记录加载失败");
     } finally {
@@ -91,37 +88,13 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
 
   function openCreate(template?: TemplateDto) {
     setError("");
-    const selected = template ?? templates.find((item) => item.id === templateId) ?? templates[0];
-    if (selected) {
-      setTemplateId(selected.id);
-      setTitle(selected.name);
-    }
+    setCreateTemplateId(template?.id ?? templates[0]?.id ?? null);
     setCreateOpen(true);
   }
 
   function selectTemplate(id: string | null) {
     setSelectedTemplateId(id);
     router.push(id ? `/runs?templateId=${encodeURIComponent(id)}` : "/runs");
-  }
-
-  async function createRun(event: React.FormEvent) {
-    event.preventDefault();
-    setCreating(true);
-    setError("");
-    try {
-      const run = await apiRequest<RunDto>("/api/runs", {
-        method: "POST",
-        body: JSON.stringify({ templateId, title, version }),
-      });
-      setCreateOpen(false);
-      setTitle("");
-      setVersion("");
-      window.location.href = `/runs/${run.id}`;
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "创建失败");
-    } finally {
-      setCreating(false);
-    }
   }
 
   async function setArchived(run: RunDto, archived: boolean) {
@@ -259,7 +232,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
         </div>
         <button
           className="button primary"
-          disabled={loading || templates.length === 0}
+          disabled={loading}
           onClick={() => openCreate(selectedTemplate)}
           type="button"
         >
@@ -276,12 +249,12 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
         <LoadingState label="正在加载执行记录..." />
       ) : templates.length === 0 ? (
         <EmptyState
-          title="请先创建 SOP 模板"
-          description="执行实例需要从一个包含节点的模板创建。"
+          title="还没有 SOP 模板"
+          description="可以直接创建执行，并在弹窗中填写自定义模板。"
           action={
-            <Link className="button primary" href="/templates/new">
-              新建模板
-            </Link>
+            <button className="button primary" onClick={() => openCreate()} type="button">
+              创建执行
+            </button>
           }
         />
       ) : selectedTemplate ? (
@@ -337,69 +310,15 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
       )}
 
       {createOpen ? (
-        <Modal
-          title="创建 SOP 执行"
-          onClose={() => {
-            if (!creating) setCreateOpen(false);
+        <RunCreateModal
+          templates={templates}
+          initialTemplateId={createTemplateId}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(run) => {
+            setCreateOpen(false);
+            window.location.href = `/runs/${run.id}`;
           }}
-        >
-          <form className="form-stack" onSubmit={createRun}>
-            {error ? <div className="error-banner">{error}</div> : null}
-            <div className="field">
-              <label htmlFor="run-template">SOP 模板</label>
-              <select
-                id="run-template"
-                className="select"
-                required
-                value={templateId}
-                onChange={(event) => {
-                  const nextTemplateId = event.target.value;
-                  setTemplateId(nextTemplateId);
-                  const nextTemplate = templates.find((template) => template.id === nextTemplateId);
-                  if (nextTemplate) setTitle(nextTemplate.name);
-                }}
-              >
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}（{template.nodeCount} 个节点）
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="run-title">执行标题</label>
-              <input
-                id="run-title"
-                className="input"
-                autoFocus
-                required
-                maxLength={100}
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="例如：Android 6 月正式版发布"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="run-version">版本号</label>
-              <input
-                id="run-version"
-                className="input"
-                maxLength={50}
-                value={version}
-                onChange={(event) => setVersion(event.target.value)}
-                placeholder="例如：1.0.0（可选）"
-              />
-            </div>
-            <div className="form-actions">
-              <button className="button" disabled={creating} type="button" onClick={() => setCreateOpen(false)}>
-                取消
-              </button>
-              <button className="button primary" disabled={creating} type="submit">
-                {creating ? <><LoadingSpinner /> 创建中...</> : "创建并开始"}
-              </button>
-            </div>
-          </form>
-        </Modal>
+        />
       ) : null}
 
       {pendingDelete ? (

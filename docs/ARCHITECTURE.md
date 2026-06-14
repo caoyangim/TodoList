@@ -84,7 +84,7 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 |---|---|
 | `User` | 用户名、密码哈希、角色和账号状态 |
 | `Session` | 90 天滑动会话及撤销状态 |
-| `Todo` | Todo 基础信息、完成状态与富备注 |
+| `Todo` | Todo 基础信息、完成状态、富备注及可选执行绑定 |
 | `SopTemplate` | SOP 模板 |
 | `SopTemplateNode` | 模板节点及父子关系 |
 | `SopRun` | 独立标题、可选版本号的执行实例和模板快照 |
@@ -100,7 +100,8 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 账号仍存在但附件已丢失的半完成状态。
 
 `SopRun.archivedAt` 用于区分未归档与已归档执行；删除 `SopRun` 时数据库外键会级联
-删除对应 `SopRunNode`。
+删除对应 `SopRunNode`。`Todo.runId` 以唯一可空字段表达一对一绑定；删除任一业务
+资源时只解除关系，不连带删除另一侧。
 
 富备注 HTML 正文和图片 ID 保存在业务表 JSON 字段中，图片文件位于
 `data/note-images/`，`NoteImage` 保存 MIME 类型、扩展名和大小。服务层使用 HTML
@@ -122,8 +123,8 @@ TodoPage
 
 ```text
 POST /api/runs
-→ 校验模板并规范化可选版本号
-→ 同一事务创建 SopRun
+→ 校验已有模板，或在事务中创建自定义模板
+→ 同一事务创建 SopRun，并按需绑定 Todo
 → 复制全部模板节点并重映射 parentId
 → 返回独立快照
 ```
@@ -143,7 +144,8 @@ PATCH 节点状态
 
 ## 5. 前端结构
 
-- 左侧导航：Todo、SOP 模板、SOP 执行。
+- 左侧导航：Todo、SOP 执行、SOP 模板。
+- 执行页与 Todo 快速转换共用同一创建弹窗，支持已有模板和自定义模板。
 - SOP 执行首页先以网格展示模板，进入模板后按未归档与已归档展示执行记录。
 - 760px 以下切换为顶部导航。
 - 视觉变量和主要组件样式位于 `globals.css`。

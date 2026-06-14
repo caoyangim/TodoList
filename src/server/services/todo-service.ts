@@ -13,10 +13,12 @@ import {
   todoPatchSchema,
   todoTransitionSchema,
 } from "@/shared/schemas/todo";
-import { NoteContentDto, TodoDto } from "@/shared/types/models";
+import { calculateRunStatus } from "@/shared/run-status";
+import { NoteContentDto, TodoDto, TodoRunSummaryDto } from "@/shared/types/models";
 
-type TodoRow = Omit<TodoDto, "note" | "verificationReport"> & {
+type TodoRow = Omit<TodoDto, "note" | "verificationReport" | "run"> & {
   userId: string;
+  runId: string | null;
   note: string | null;
   verificationReport: string | null;
 };
@@ -47,13 +49,56 @@ function parseRichContent(userId: string, value: string | null): NoteContentDto 
   };
 }
 
+function getRunSummary(userId: string, runId: string | null): TodoRunSummaryDto | null {
+  if (!runId) return null;
+  const run = db.prepare(`
+    SELECT id, title, startedAt, completedAt, archivedAt
+    FROM SopRun WHERE id = ? AND userId = ?
+  `).get(runId, userId) as {
+    id: string;
+    title: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    archivedAt: string | null;
+  } | undefined;
+  if (!run) return null;
+
+  const nodes = db.prepare(
+    "SELECT id, parentId, isRequired, completedAt FROM SopRunNode WHERE runId = ?",
+  ).all(runId) as {
+    id: string;
+    parentId: string | null;
+    isRequired: number;
+    completedAt: string | null;
+  }[];
+  const parentIds = new Set(nodes.map((node) => node.parentId).filter(Boolean));
+  const leaves = nodes.filter((node) => !parentIds.has(node.id));
+  const requiredLeaves = leaves.filter((node) => Boolean(node.isRequired));
+  const progressLeaves = requiredLeaves.length > 0 ? requiredLeaves : leaves;
+  const completedCount = leaves.filter((node) => node.completedAt).length;
+  const progressCompletedCount = progressLeaves.filter((node) => node.completedAt).length;
+
+  return {
+    id: run.id,
+    title: run.title,
+    status: calculateRunStatus(run.startedAt, run.completedAt),
+    completedCount,
+    totalCount: leaves.length,
+    progressPercent: progressLeaves.length
+      ? Math.round((progressCompletedCount / progressLeaves.length) * 100)
+      : 0,
+    archivedAt: run.archivedAt,
+  };
+}
+
 function toTodoDto(userId: string, row: TodoRow): TodoDto {
-  const { userId: ownerId, ...todo } = row;
+  const { userId: ownerId, runId, ...todo } = row;
   void ownerId;
   return {
     ...todo,
     note: parseRichContent(userId, row.note),
     verificationReport: parseRichContent(userId, row.verificationReport),
+    run: getRunSummary(userId, runId),
   };
 }
 
@@ -119,15 +164,16 @@ export const todoService = {
       importancePriority: data.importancePriority,
       dueAt: data.dueAt?.toISOString() ?? null,
       completedAt: null,
+      run: null,
       createdAt: now,
       updatedAt: now,
     };
     db.prepare(`
       INSERT INTO Todo (
-        id, userId, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
+        id, userId, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, runId, createdAt, updatedAt
       )
       VALUES (
-        @id, @userId, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
+        @id, @userId, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, NULL, @createdAt, @updatedAt
       )
     `).run({ ...todo, userId });
     return todo;

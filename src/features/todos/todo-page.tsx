@@ -1,14 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronRight, Edit3, File, MessageSquare, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Edit3, File, ListChecks, MessageSquare, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { apiRequest } from "@/shared/api-client";
-import { NoteContentDto, TodoDto, TodoPriority, TodoStatus } from "@/shared/types/models";
+import { NoteContentDto, TemplateDto, TodoDto, TodoPriority, TodoStatus } from "@/shared/types/models";
 import { formatFileSize } from "@/shared/format";
 import { EmptyState } from "@/components/empty-state";
 import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { Modal } from "@/components/modal";
 import { RichNoteEditor } from "@/components/rich-note-editor";
+import { RunCreateModal } from "@/features/runs/run-create-modal";
 
 type StatusFilter = "pending" | "resolved" | "completed" | "all";
 type TodoForm = {
@@ -59,11 +61,13 @@ function formatDueDate(value: string | null) {
 export function TodoPage() {
   const [status, setStatus] = useState<StatusFilter>("pending");
   const [todos, setTodos] = useState<TodoDto[]>([]);
+  const [templates, setTemplates] = useState<TemplateDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoDto | null | "new">(null);
   const [noteTodo, setNoteTodo] = useState<TodoDto | null>(null);
   const [verifyTodo, setVerifyTodo] = useState<TodoDto | null>(null);
+  const [convertingTodo, setConvertingTodo] = useState<TodoDto | null>(null);
   const [noteValue, setNoteValue] = useState<NoteContentDto>(emptyRichContent);
   const [verificationReportValue, setVerificationReportValue] = useState<NoteContentDto>(emptyRichContent);
   const [form, setForm] = useState<TodoForm>(emptyForm);
@@ -73,7 +77,12 @@ export function TodoPage() {
     if (showLoading) setLoading(true);
     setError("");
     try {
-      setTodos(await apiRequest<TodoDto[]>(`/api/todos?status=${status}`));
+      const [todoData, templateData] = await Promise.all([
+        apiRequest<TodoDto[]>(`/api/todos?status=${status}`),
+        apiRequest<TemplateDto[]>("/api/templates"),
+      ]);
+      setTodos(todoData);
+      setTemplates(templateData);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Todo 加载失败");
     } finally {
@@ -312,6 +321,33 @@ export function TodoPage() {
                 <div className="list-item-main">
                   <h2 className={`item-title ${todo.status === "COMPLETED" ? "completed-text" : ""}`}>{todo.title}</h2>
                   {todo.description ? <p className="item-description">{todo.description}</p> : null}
+                  {todo.run ? (
+                    <Link className="todo-run-progress" href={`/runs/${todo.run.id}`}>
+                      <div className="todo-run-progress-heading">
+                        <span>
+                          <ListChecks size={14} />
+                          {todo.run.title}
+                          {todo.run.archivedAt ? "（已归档）" : ""}
+                        </span>
+                        <strong>{todo.run.progressPercent}%</strong>
+                      </div>
+                      <div className="progress-track">
+                        <div
+                          className={`progress-bar ${
+                            todo.run.status === "COMPLETED"
+                              ? "completed"
+                              : todo.run.progressPercent >= 80
+                                ? "near-complete"
+                                : ""
+                          }`}
+                          style={{ width: `${todo.run.progressPercent}%` }}
+                        />
+                      </div>
+                      <span className="todo-run-progress-count">
+                        {todo.run.completedCount}/{todo.run.totalCount} 个执行节点
+                      </span>
+                    </Link>
+                  ) : null}
                   {todo.note ? (
                     <div className="node-note todo-note">
                       <MessageSquare size={14} />
@@ -408,6 +444,20 @@ export function TodoPage() {
                   </div>
                 </div>
                 <div className="item-actions">
+                  {!todo.run ? (
+                    <button
+                      aria-label="转换为 SOP 执行"
+                      className="button ghost icon-only"
+                      disabled={isBusy}
+                      onClick={() => {
+                        setError("");
+                        setConvertingTodo(todo);
+                      }}
+                      title="转换为 SOP 执行"
+                    >
+                      <ListChecks size={16} />
+                    </button>
+                  ) : null}
                   {todo.status !== "PENDING" ? (
                     <button
                       aria-label="退回待处理"
@@ -488,6 +538,19 @@ export function TodoPage() {
             </div>
           </form>
         </Modal>
+      ) : null}
+
+      {convertingTodo ? (
+        <RunCreateModal
+          templates={templates}
+          initialTitle={convertingTodo.title}
+          todoId={convertingTodo.id}
+          onClose={() => setConvertingTodo(null)}
+          onCreated={() => {
+            setConvertingTodo(null);
+            void loadTodos(false);
+          }}
+        />
       ) : null}
 
       {verifyTodo ? (

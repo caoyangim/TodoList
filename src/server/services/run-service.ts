@@ -13,6 +13,7 @@ import {
   runTitleSchema,
   runUpdateSchema,
 } from "@/shared/schemas/run";
+import { templateInputSchema } from "@/shared/schemas/template";
 import { calculateRunStatus } from "@/shared/run-status";
 import { NoteContentDto, RunDto, RunNodeDto } from "@/shared/types/models";
 
@@ -173,27 +174,79 @@ export const runService = {
 
   async create(userId: string, input: unknown) {
     const data = runInputSchema.parse(input);
-    const template = db.prepare("SELECT * FROM SopTemplate WHERE id = ? AND userId = ?").get(data.templateId, userId) as
-      | { id: string; name: string; description: string | null }
-      | undefined;
-    if (!template) throw new AppError("TEMPLATE_NOT_FOUND", "SOP 模板不存在", 404);
-    const templateNodes = db.prepare(`
-      SELECT id, name, description, sortOrder, isRequired, parentId
-      FROM SopTemplateNode WHERE templateId = ? ORDER BY sortOrder
-    `).all(template.id) as {
+    const todo = data.todoId
+      ? db.prepare("SELECT id, runId FROM Todo WHERE id = ? AND userId = ?").get(data.todoId, userId) as
+          | { id: string; runId: string | null }
+          | undefined
+      : undefined;
+    if (data.todoId && !todo) throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
+    if (todo?.runId) {
+      throw new AppError("TODO_RUN_ALREADY_BOUND", "该 Todo 已绑定 SOP 执行", 409);
+    }
+
+    type TemplateNode = {
       id: string;
       name: string;
       description: string | null;
       sortOrder: number;
       isRequired: number;
       parentId: string | null;
-    }[];
-    if (!templateNodes.length) throw new AppError("TEMPLATE_EMPTY", "模板至少需要一个节点", 409);
+    };
 
     const id = randomUUID();
     const now = new Date().toISOString();
-    const nodeIdMap = new Map(templateNodes.map((node) => [node.id, randomUUID()]));
+    let templateId = "";
     db.transaction(() => {
+      if ("template" in data) {
+        const template = templateInputSchema.parse(data.template);
+        templateId = randomUUID();
+        db.prepare(`
+          INSERT INTO SopTemplate (id, userId, name, description, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(templateId, userId, template.name, template.description, now, now);
+        const assignedIds = template.nodes.map(() => randomUUID());
+        const clientIdMap = new Map(
+          template.nodes.flatMap((node, index) =>
+            node.id ? [[node.id, assignedIds[index]] as const] : [],
+          ),
+        );
+        const insertTemplateNode = db.prepare(`
+          INSERT INTO SopTemplateNode (
+            id, templateId, name, description, sortOrder, isRequired, parentId, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        template.nodes.forEach((node, index) => {
+          insertTemplateNode.run(
+            assignedIds[index],
+            templateId,
+            node.name,
+            node.description,
+            index + 1,
+            node.isRequired ? 1 : 0,
+            node.parentId ? clientIdMap.get(node.parentId) ?? null : null,
+            now,
+            now,
+          );
+        });
+      } else {
+        templateId = data.templateId;
+      }
+
+      const template = db.prepare(
+        "SELECT id, name, description FROM SopTemplate WHERE id = ? AND userId = ?",
+      ).get(templateId, userId) as
+        | { id: string; name: string; description: string | null }
+        | undefined;
+      if (!template) throw new AppError("TEMPLATE_NOT_FOUND", "SOP 模板不存在", 404);
+      const templateNodes = db.prepare(`
+        SELECT id, name, description, sortOrder, isRequired, parentId
+        FROM SopTemplateNode WHERE templateId = ? ORDER BY sortOrder
+      `).all(template.id) as TemplateNode[];
+      if (!templateNodes.length) {
+        throw new AppError("TEMPLATE_EMPTY", "模板至少需要一个节点", 409);
+      }
+      const nodeIdMap = new Map(templateNodes.map((node) => [node.id, randomUUID()]));
+
       db.prepare(`
         INSERT INTO SopRun (
           id, userId, templateId, templateNameSnapshot, templateDescriptionSnapshot,
@@ -220,6 +273,15 @@ export const runService = {
           now,
         ),
       );
+      if (data.todoId) {
+        const result = db.prepare(`
+          UPDATE Todo SET runId = ?, updatedAt = ?
+          WHERE id = ? AND userId = ? AND runId IS NULL
+        `).run(id, now, data.todoId, userId);
+        if (result.changes === 0) {
+          throw new AppError("TODO_RUN_ALREADY_BOUND", "该 Todo 已绑定 SOP 执行", 409);
+        }
+      }
     })();
     return this.get(userId, id);
   },
@@ -312,6 +374,7 @@ export const runService = {
   async remove(userId: string, id: string) {
     await this.get(userId, id);
     db.transaction(() => {
+      db.prepare("UPDATE Todo SET runId = NULL WHERE runId = ? AND userId = ?").run(id, userId);
       db.prepare("DELETE FROM SopRun WHERE id = ? AND userId = ?").run(id, userId);
     })();
   },

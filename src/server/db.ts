@@ -52,6 +52,7 @@ db.exec(`
     importancePriority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(importancePriority IN ('LOW', 'MEDIUM', 'HIGH')),
     dueAt TEXT,
     completedAt TEXT,
+    runId TEXT UNIQUE REFERENCES SopRun(id) ON DELETE SET NULL,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL
   );
@@ -159,6 +160,7 @@ ensureColumn("SopRunNode", "lastModifiedAt", "TEXT");
 ensureColumn("SopRunNode", "note", "TEXT");
 ensureColumn("Todo", "note", "TEXT");
 ensureColumn("Todo", "verificationReport", "TEXT");
+ensureColumn("Todo", "runId", "TEXT");
 ensureColumn(
   "Todo",
   "status",
@@ -179,6 +181,7 @@ ensureColumn("SopRun", "title", "TEXT");
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);
+  CREATE UNIQUE INDEX IF NOT EXISTS Todo_runId_key ON Todo(runId) WHERE runId IS NOT NULL;
 `);
 
 function migrateSopRunVersionConstraint() {

@@ -151,6 +151,8 @@ PATCH /api/todos/:id/note
 - Todo 备注与 SOP 节点备注使用相同的富文本、链接白名单和图片规则。
 - 正文和图片都为空，或提交 `null`，会清空备注。
 - 更新备注不改变 Todo 状态。
+- Todo DTO 的 `run` 字段为绑定执行摘要或 `null`，包含执行 ID、标题、状态、进度、
+  节点计数及归档时间。
 
 ## 4. SOP 模板
 
@@ -223,15 +225,44 @@ POST /api/runs
 {
   "templateId": "template-id",
   "title": "Android 6 月正式版发布",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "todoId": "optional-todo-id"
 }
 ```
 
 `title` 必填，最长 100 个字符。`version` 为可选字段，允许为空，也不会因为与同模板下其他执行记录重复而拦截创建。
+`todoId` 可选；提供后会将新执行与该 Todo 一对一绑定。
+
+也可以用自定义模板替代 `templateId`：
+
+```json
+{
+  "template": {
+    "name": "临时发布流程",
+    "description": "创建执行时保存为模板",
+    "nodes": [
+      {
+        "id": "client-node-id",
+        "name": "验证发布包",
+        "description": null,
+        "sortOrder": 1,
+        "isRequired": true,
+        "parentId": null
+      }
+    ]
+  },
+  "title": "Android 6 月正式版发布",
+  "version": null,
+  "todoId": "optional-todo-id"
+}
+```
+
+自定义模板、执行快照和 Todo 绑定在同一事务中创建。
 
 常见冲突：
 
 - `TEMPLATE_EMPTY`：模板没有节点。
+- `TODO_RUN_ALREADY_BOUND`：Todo 已绑定另一条执行。
 
 ### 归档、恢复和删除
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
+import { templateInputSchema } from "@/shared/schemas/template";
 
-export const runInputSchema = z.object({
-  templateId: z.string().min(1, "请选择模板"),
+const runDetailsSchema = z.object({
   title: z.string().trim().min(1, "请输入执行标题").max(100),
   version: z
     .string()
@@ -10,7 +10,19 @@ export const runInputSchema = z.object({
     .optional()
     .nullable()
     .transform((value) => value || null),
+  todoId: z.string().uuid("Todo ID 无效").optional(),
 });
+
+export const runInputSchema = z.union([
+  runDetailsSchema.extend({
+    templateId: z.string().min(1, "请选择模板"),
+    template: z.never().optional(),
+  }),
+  runDetailsSchema.extend({
+    template: templateInputSchema,
+    templateId: z.never().optional(),
+  }),
+]);
 
 export const runArchiveSchema = z.object({
   archived: z.boolean(),

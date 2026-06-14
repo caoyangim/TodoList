@@ -290,6 +290,45 @@ a {
   transition: opacity 120ms ease;
 }
 
+.todo-run-progress {
+  display: grid;
+  max-width: 520px;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  color: inherit;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.todo-run-progress:hover {
+  border-color: var(--accent);
+}
+
+.todo-run-progress-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.todo-run-progress-heading span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.todo-run-progress-heading strong {
+  color: var(--accent);
+}
+
+.todo-run-progress-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .list-item:hover .item-actions {
   opacity: 1;
 }
@@ -1036,6 +1075,12 @@ a {
   background: white;
   border-radius: 14px;
   box-shadow: 0 20px 70px rgb(0 0 0 / 18%);
+}
+
+.modal.run-create-modal {
+  overflow-y: auto;
+  width: min(100%, 900px);
+  max-height: calc(100vh - 40px);
 }
 
 .modal-title {

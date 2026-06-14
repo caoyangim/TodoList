@@ -173,6 +173,145 @@ describe("Todo service", () => {
 });
 
 describe("SOP service", () => {
+  it("creates a custom template, run snapshot and Todo binding atomically", async () => {
+    const todo = await todoService.create({
+      title: "上线支付功能",
+      description: "",
+      timePriority: "HIGH",
+      importancePriority: "HIGH",
+      dueAt: null,
+    });
+    const run = await runService.create({
+      template: {
+        name: "支付上线流程",
+        description: "从 Todo 创建",
+        nodes: [
+          {
+            id: "parent",
+            name: "上线准备",
+            description: "",
+            sortOrder: 1,
+            isRequired: true,
+            parentId: null,
+          },
+          {
+            id: "child",
+            name: "检查配置",
+            description: "",
+            sortOrder: 2,
+            isRequired: true,
+            parentId: "parent",
+          },
+        ],
+      },
+      title: todo.title,
+      version: "",
+      todoId: todo.id,
+    });
+
+    expect(run.templateName).toBe("支付上线流程");
+    expect(run.nodes.map((node) => node.name)).toEqual(["上线准备", "检查配置"]);
+    expect(run.nodes[1].parentId).toBe(run.nodes[0].id);
+    expect((await todoService.get(todo.id)).run).toMatchObject({
+      id: run.id,
+      title: todo.title,
+      progressPercent: 0,
+    });
+
+    const completed = await runService.setNodeCompletion(run.id, run.nodes[1].id, true);
+    expect(completed.progressPercent).toBe(100);
+    expect((await todoService.get(todo.id)).run).toMatchObject({
+      status: "COMPLETED",
+      progressPercent: 100,
+    });
+    expect((await todoService.get(todo.id)).status).toBe("PENDING");
+  });
+
+  it("rejects duplicate Todo binding without creating a custom template", async () => {
+    const todo = await todoService.create({
+      title: "重复绑定",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    const template = await templateService.create({
+      name: "绑定模板",
+      description: "",
+      nodes: [{ name: "执行", description: "", sortOrder: 1 }],
+    });
+    await runService.create({
+      templateId: template.id,
+      title: "首次绑定",
+      version: null,
+      todoId: todo.id,
+    });
+    const templateCountBefore = (
+      db.prepare("SELECT COUNT(*) AS count FROM SopTemplate WHERE userId = ?").get(testUserId) as {
+        count: number;
+      }
+    ).count;
+
+    await expect(
+      runService.create({
+        template: {
+          name: "不应保存",
+          description: "",
+          nodes: [{ name: "节点", description: "", sortOrder: 1 }],
+        },
+        title: "再次绑定",
+        version: null,
+        todoId: todo.id,
+      }),
+    ).rejects.toMatchObject({ code: "TODO_RUN_ALREADY_BOUND", status: 409 });
+    expect(
+      (
+        db.prepare("SELECT COUNT(*) AS count FROM SopTemplate WHERE userId = ?").get(testUserId) as {
+          count: number;
+        }
+      ).count,
+    ).toBe(templateCountBefore);
+  });
+
+  it("only unbinds the other resource when deleting a Todo or run", async () => {
+    const template = await templateService.create({
+      name: "解绑模板",
+      description: "",
+      nodes: [{ name: "节点", description: "", sortOrder: 1 }],
+    });
+    const todoForRunDelete = await todoService.create({
+      title: "删除执行",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    const runForDelete = await runService.create({
+      templateId: template.id,
+      title: "待删除执行",
+      version: null,
+      todoId: todoForRunDelete.id,
+    });
+    await runService.remove(runForDelete.id);
+    expect((await todoService.get(todoForRunDelete.id)).run).toBeNull();
+
+    const todoForDelete = await todoService.create({
+      title: "删除 Todo",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    const preservedRun = await runService.create({
+      templateId: template.id,
+      title: "保留执行",
+      version: null,
+      todoId: todoForDelete.id,
+    });
+    await todoService.remove(todoForDelete.id);
+    expect((await runService.get(preservedRun.id)).title).toBe("保留执行");
+  });
+
   it("keeps run snapshots independent from template edits", async () => {
     const template = await templateService.create({
       name: "发布流程",
@@ -629,6 +768,26 @@ describe("Authentication and data isolation", () => {
         version: null,
       }),
     ).rejects.toMatchObject({ code: "TEMPLATE_NOT_FOUND", status: 404 });
+    await expect(
+      rawRunService.create(bob.id, {
+        template: {
+          name: "Cross-user Todo template",
+          description: null,
+          nodes: [
+            {
+              name: "Step",
+              description: null,
+              sortOrder: 1,
+              isRequired: true,
+              parentId: null,
+            },
+          ],
+        },
+        title: "Cross-user Todo run",
+        version: null,
+        todoId: aliceTodo.id,
+      }),
+    ).rejects.toMatchObject({ code: "TODO_NOT_FOUND", status: 404 });
 
     const file = await rawNoteFileService.create(
       alice.id,
