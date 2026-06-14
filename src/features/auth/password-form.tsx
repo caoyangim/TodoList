@@ -4,7 +4,13 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest, getApiErrorMessage } from "@/shared/api-client";
 
-export function PasswordForm({ forced }: { forced: boolean }) {
+export function PasswordForm({
+  forced,
+  embedded = false,
+}: {
+  forced: boolean;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -35,9 +41,13 @@ export function PasswordForm({ forced }: { forced: boolean }) {
   }
 
   return (
-    <form className="auth-card form-stack" onSubmit={submit}>
+    <form className={`${embedded ? "card" : "auth-card"} form-stack`} onSubmit={submit}>
       <div>
-        <h1 className="auth-title">{forced ? "设置新密码" : "修改密码"}</h1>
+        {embedded ? (
+          <h2 className="section-title">修改密码</h2>
+        ) : (
+          <h1 className="auth-title">{forced ? "设置新密码" : "修改密码"}</h1>
+        )}
         <p className="page-subtitle">
           {forced ? "首次登录需要替换管理员提供的临时密码。" : "修改后所有设备都需要重新登录。"}
         </p>
@@ -49,12 +59,12 @@ export function PasswordForm({ forced }: { forced: boolean }) {
       </div>
       <div className="field">
         <label htmlFor="newPassword">新密码</label>
-        <input className="input" id="newPassword" type="password" autoComplete="new-password" maxLength={12} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
-        <span className="field-hint">密码长度为 12 个字符</span>
+        <input className="input" id="newPassword" type="password" autoComplete="new-password" minLength={6} maxLength={32} required value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+        <span className="field-hint">密码长度为 6–32 个字符</span>
       </div>
       <div className="field">
         <label htmlFor="confirmPassword">确认新密码</label>
-        <input className="input" id="confirmPassword" type="password" autoComplete="new-password" maxLength={12} value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+        <input className="input" id="confirmPassword" type="password" autoComplete="new-password" minLength={6} maxLength={32} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
       </div>
       <button className="button primary" disabled={submitting} type="submit">
         {submitting ? "正在保存..." : "保存并重新登录"}

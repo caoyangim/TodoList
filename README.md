@@ -36,7 +36,7 @@ npm run dev
 访问 <http://localhost:3000>。
 
 首次启动时会自动创建 SQLite 表结构，无需单独安装 SQLite。启动前必须在 `.env`
-设置 `TODOFLOW_ADMIN_USERNAME` 和至少 12 位的 `TODOFLOW_ADMIN_PASSWORD`。
+设置 `TODOFLOW_ADMIN_USERNAME` 和 6–32 位的 `TODOFLOW_ADMIN_PASSWORD`。
 首次管理员会接管升级前已有数据，之后可在“账号管理”中创建彼此数据隔离的普通用户。
 
 ## 常用命令

@@ -249,18 +249,24 @@ function ensureInitialAdmin() {
     );
   }
 
-  if (!/^[a-z0-9._-]{3,32}$/.test(username) || password.length < 12) {
+  if (
+    !/^[a-z0-9._-]{3,32}$/.test(username) ||
+    password.length < 6 ||
+    password.length > 32
+  ) {
     throw new Error("初始化管理员用户名或密码不符合安全要求");
   }
 
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO User (
+    INSERT OR IGNORE INTO User (
       id, username, passwordHash, role, isActive, mustChangePassword, createdAt, updatedAt
     ) VALUES (?, ?, ?, 'ADMIN', 1, 0, ?, ?)
   `).run(id, username, hashPassword(password), now, now);
-  return id;
+  return (
+    db.prepare("SELECT id FROM User ORDER BY createdAt LIMIT 1").get() as { id: string }
+  ).id;
 }
 
 const initialAdminId = ensureInitialAdmin();

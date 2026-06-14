@@ -15,7 +15,7 @@ npm install
 ```dotenv
 DATABASE_URL="file:./data/todoflow.db"
 TODOFLOW_ADMIN_USERNAME="admin"
-TODOFLOW_ADMIN_PASSWORD="至少12位的开发密码"
+TODOFLOW_ADMIN_PASSWORD="6至32位的开发密码"
 ```
 
 复制 `.env.example` 为 `.env`。`.env` 和 `data/` 不提交 Git。

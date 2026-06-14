@@ -990,6 +990,28 @@ a {
   font-size: 13px;
 }
 
+.success-banner {
+  padding: 10px 12px;
+  color: var(--success);
+  background: #edf8f2;
+  border: 1px solid #cbe8d8;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.account-settings {
+  display: grid;
+  gap: 20px;
+}
+
+.danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-color: #f1c8c3;
+}
+
 .modal-backdrop {
   position: fixed;
   z-index: 50;
@@ -1263,6 +1285,11 @@ a {
   }
 
   .account-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .danger-zone {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -50,10 +50,15 @@ POST  /api/auth/login
 POST  /api/auth/logout
 GET   /api/auth/me
 PATCH /api/auth/password
+DELETE /api/auth/account
 ```
 
 登录提交 `{ "username": "...", "password": "..." }`。临时密码首次登录后必须修改，
 修改成功会撤销该用户所有会话。会话有效期为 90 天，活跃使用时续期。
+
+普通用户可调用注销接口永久删除自己的账号、全部业务数据和附件。成功返回 `204`
+并清除登录 Cookie。管理员账号调用时返回
+`409 ADMIN_ACCOUNT_CANNOT_BE_DELETED`。
 
 管理员账号接口：
 
@@ -64,6 +69,10 @@ PATCH /api/admin/users/:id
 ```
 
 管理员可创建账号、重置临时密码和启停账号；不提供公开注册或永久删除。
+创建账号时，会在同一事务中把管理员名下的 `APP 发布流程` 和 `常规工作流`
+复制为新用户的独立 SOP 模板。模板和节点使用新的 ID，用户可自行修改或删除，
+且后续修改不会影响管理员原模板或其他用户副本。管理员缺少任一默认模板时，
+接口返回 `409 DEFAULT_TEMPLATE_NOT_FOUND`，不创建用户。
 
 ## 3. Todo
 

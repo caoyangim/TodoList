@@ -53,9 +53,12 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
             账号管理
           </Link>
         )}
-        <Link className="nav-link" href="/change-password">
+        <Link
+          className={`nav-link ${pathname.startsWith("/account") ? "active" : ""}`}
+          href="/account"
+        >
           <KeyRound size={17} />
-          修改密码
+          账号设置
         </Link>
         <button className="nav-link nav-button" type="button" onClick={logout}>
           <LogOut size={17} />

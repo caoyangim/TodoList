@@ -43,8 +43,12 @@ export function UserAdminPage({ currentUserId }: { currentUserId: string }) {
   }
 
   async function resetPassword(user: AdminUserDto) {
-    const nextPassword = window.prompt(`为 ${user.username} 设置临时密码（至少 12 个字符）`);
+    const nextPassword = window.prompt(`为 ${user.username} 设置临时密码（6–32 个字符）`);
     if (!nextPassword) return;
+    if (nextPassword.length < 6 || nextPassword.length > 32) {
+      setError("密码长度必须为 6–32 个字符");
+      return;
+    }
     try {
       await apiRequest(`/api/admin/users/${user.id}`, {
         method: "PATCH",
@@ -89,7 +93,8 @@ export function UserAdminPage({ currentUserId }: { currentUserId: string }) {
           </div>
           <div className="field">
             <label htmlFor="temporaryPassword">临时密码</label>
-            <input className="input" id="temporaryPassword" type="password" maxLength={12} value={password} onChange={(event) => setPassword(event.target.value)} />
+            <input className="input" id="temporaryPassword" type="password" minLength={6} maxLength={32} required value={password} onChange={(event) => setPassword(event.target.value)} />
+            <span className="field-hint">密码长度为 6–32 个字符</span>
           </div>
         </div>
         <div className="form-actions">

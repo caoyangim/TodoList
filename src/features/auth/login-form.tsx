@@ -12,6 +12,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const accountDeleted = searchParams.get("accountDeleted") === "1";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -40,6 +41,7 @@ export function LoginForm() {
         <h1 className="auth-title">登录</h1>
         <p className="page-subtitle">使用管理员为你创建的账号。</p>
       </div>
+      {accountDeleted && <div className="success-banner">账号已注销。</div>}
       {error && <div className="error-banner">{error}</div>}
       <div className="field">
         <label htmlFor="username">用户名</label>

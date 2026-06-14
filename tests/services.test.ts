@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const testDir = path.resolve(process.cwd(), "data-test");
 const testDb = path.join(testDir, "todoflow-test.db");
 process.env.DATABASE_URL = `file:${testDb}`;
 process.env.NOTE_FILE_DIR = path.join(testDir, "note-files");
+process.env.NOTE_IMAGE_DIR = path.join(testDir, "note-images");
 process.env.TODOFLOW_ADMIN_USERNAME = "admin";
 process.env.TODOFLOW_ADMIN_PASSWORD = "todoflow-test-password";
 
@@ -13,6 +14,7 @@ let rawTodoService: typeof import("@/server/services/todo-service").todoService;
 let rawTemplateService: typeof import("@/server/services/template-service").templateService;
 let rawRunService: typeof import("@/server/services/run-service").runService;
 let rawNoteFileService: typeof import("@/server/services/note-file-service").noteFileService;
+let rawNoteImageService: typeof import("@/server/services/note-image-service").noteImageService;
 let authService: typeof import("@/server/services/auth-service").authService;
 let db: typeof import("@/server/db").db;
 let testUserId: string;
@@ -62,6 +64,7 @@ beforeAll(async () => {
   ({ templateService: rawTemplateService } = await import("@/server/services/template-service"));
   ({ runService: rawRunService } = await import("@/server/services/run-service"));
   ({ noteFileService: rawNoteFileService } = await import("@/server/services/note-file-service"));
+  ({ noteImageService: rawNoteImageService } = await import("@/server/services/note-image-service"));
   ({ authService } = await import("@/server/services/auth-service"));
   testUserId = (
     db.prepare("SELECT id FROM User WHERE username = ?").get("admin") as { id: string }
@@ -457,14 +460,101 @@ describe("Authentication and data isolation", () => {
   });
 
   it("creates a user, requires a password change and revokes old sessions", async () => {
+    const releaseTemplate = await rawTemplateService.create(testUserId, {
+      name: "APP 发布流程",
+      description: "默认发布检查",
+      nodes: [
+        {
+          id: "release-parent",
+          name: "应用市场提审",
+          description: "",
+          sortOrder: 1,
+          isRequired: true,
+          parentId: null,
+        },
+        {
+          id: "release-child",
+          name: "市场提审",
+          description: "",
+          sortOrder: 2,
+          isRequired: true,
+          parentId: "release-parent",
+        },
+      ],
+    });
+    await rawTemplateService.create(testUserId, {
+      name: "常规工作流",
+      description: "默认工作检查",
+      nodes: [
+        {
+          name: "明确目标",
+          description: "",
+          sortOrder: 1,
+          isRequired: true,
+          parentId: null,
+        },
+      ],
+    });
+    await rawTemplateService.create(testUserId, {
+      name: "管理员私有模板",
+      description: "",
+      nodes: [
+        {
+          name: "不应分配",
+          description: "",
+          sortOrder: 1,
+          isRequired: true,
+          parentId: null,
+        },
+      ],
+    });
+
     const user = authService.createUser(admin(), {
       username: "alice",
-      password: "AlicePass123",
+      password: "Alice6",
     });
     expect(user.mustChangePassword).toBe(true);
 
+    const aliceTemplates = await rawTemplateService.list(user.id);
+    expect(aliceTemplates.map((template) => template.name).sort()).toEqual([
+      "APP 发布流程",
+      "常规工作流",
+    ]);
+    const aliceReleaseTemplate = aliceTemplates.find(
+      (template) => template.name === "APP 发布流程",
+    )!;
+    expect(aliceReleaseTemplate.id).not.toBe(releaseTemplate.id);
+    expect(aliceReleaseTemplate.nodes.map((node) => node.id)).not.toEqual(
+      releaseTemplate.nodes.map((node) => node.id),
+    );
+    expect(aliceReleaseTemplate.nodes[1].parentId).toBe(aliceReleaseTemplate.nodes[0].id);
+
+    await rawTemplateService.update(user.id, aliceReleaseTemplate.id, {
+      name: "Alice 发布流程",
+      description: "",
+      nodes: [
+        {
+          name: "Alice 自定义步骤",
+          description: "",
+          sortOrder: 1,
+          isRequired: true,
+          parentId: null,
+        },
+      ],
+    });
+    const aliceWorkflow = aliceTemplates.find(
+      (template) => template.name === "常规工作流",
+    )!;
+    await rawTemplateService.remove(user.id, aliceWorkflow.id);
+    expect((await rawTemplateService.get(testUserId, releaseTemplate.id)).name).toBe(
+      "APP 发布流程",
+    );
+    expect((await rawTemplateService.list(user.id)).map((template) => template.name)).toEqual([
+      "Alice 发布流程",
+    ]);
+
     const loggedIn = await authService.login(
-      { username: "alice", password: "AlicePass123" },
+      { username: "alice", password: "Alice6" },
       "login-test",
     );
     expect(authService.authenticate(loggedIn.token)?.id).toBe(user.id);
@@ -486,13 +576,13 @@ describe("Authentication and data isolation", () => {
     );
 
     authService.changePassword(user.id, {
-      currentPassword: "AlicePass123",
-      newPassword: "AliceNew1234",
+      currentPassword: "Alice6",
+      newPassword: "AliceNew7",
     });
     expect(authService.authenticate(loggedIn.token)).toBeNull();
 
     const relogged = await authService.login(
-      { username: "alice", password: "AliceNew1234" },
+      { username: "alice", password: "AliceNew7" },
       "login-test",
     );
     expect(relogged.user.mustChangePassword).toBe(false);
@@ -584,5 +674,144 @@ describe("Authentication and data isolation", () => {
         "rate-limit-test",
       ),
     ).rejects.toMatchObject({ code: "LOGIN_RATE_LIMITED", status: 429 });
+  });
+
+  it("permanently deletes a user with all business data and attachment files", async () => {
+    const user = authService.createUser(admin(), {
+      username: "charlie",
+      password: "Charlie7",
+    });
+    const otherUserCountBefore = (
+      db.prepare("SELECT COUNT(*) AS count FROM Todo WHERE userId = ?").get(testUserId) as {
+        count: number;
+      }
+    ).count;
+    const todo = await rawTodoService.create(user.id, {
+      title: "Delete with account",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    const template = await rawTemplateService.create(user.id, {
+      name: "Delete template",
+      description: "",
+      nodes: [
+        {
+          name: "Delete node",
+          description: "",
+          sortOrder: 1,
+          isRequired: true,
+          parentId: null,
+        },
+      ],
+    });
+    const run = await rawRunService.create(user.id, {
+      templateId: template.id,
+      title: "Delete run",
+      version: null,
+    });
+    const file = await rawNoteFileService.create(
+      user.id,
+      new File([new Uint8Array([1, 2, 3])], "delete.txt", { type: "text/plain" }),
+    );
+    const image = await rawNoteImageService.create(
+      user.id,
+      new File([new Uint8Array([137, 80, 78, 71])], "delete.png", {
+        type: "image/png",
+      }),
+    );
+    const session = await authService.login(
+      { username: user.username, password: "Charlie7" },
+      "delete-account-test",
+    );
+
+    const filePath = path.join(testDir, "note-files", `${file.id}.txt`);
+    const imagePath = path.join(testDir, "note-images", `${image.id}.png`);
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(fs.existsSync(imagePath)).toBe(true);
+
+    authService.deleteAccount(session.user);
+
+    expect(authService.authenticate(session.token)).toBeNull();
+    expect(db.prepare("SELECT id FROM User WHERE id = ?").get(user.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM Todo WHERE id = ?").get(todo.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM SopTemplate WHERE id = ?").get(template.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM SopRun WHERE id = ?").get(run.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(file.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM NoteImage WHERE id = ?").get(image.id)).toBeUndefined();
+    expect(fs.existsSync(filePath)).toBe(false);
+    expect(fs.existsSync(imagePath)).toBe(false);
+    expect(
+      (
+        db.prepare("SELECT COUNT(*) AS count FROM Todo WHERE userId = ?").get(testUserId) as {
+          count: number;
+        }
+      ).count,
+    ).toBe(otherUserCountBefore);
+  });
+
+  it("rejects administrator account deletion", () => {
+    expect(() => authService.deleteAccount(admin())).toThrowError(
+      expect.objectContaining({
+        code: "ADMIN_ACCOUNT_CANNOT_BE_DELETED",
+        status: 409,
+      }),
+    );
+    expect(db.prepare("SELECT id FROM User WHERE id = ?").get(testUserId)).toBeTruthy();
+  });
+
+  it("restores staged files when database deletion fails", async () => {
+    const user = authService.createUser(admin(), {
+      username: "delta",
+      password: "Delta888",
+    });
+    const file = await rawNoteFileService.create(
+      user.id,
+      new File([new Uint8Array([4, 5, 6])], "restore.txt", { type: "text/plain" }),
+    );
+    const filePath = path.join(testDir, "note-files", `${file.id}.txt`);
+    db.exec(`
+      CREATE TRIGGER FailDeltaDelete
+      BEFORE DELETE ON User
+      WHEN OLD.id = '${user.id}'
+      BEGIN
+        SELECT RAISE(ABORT, 'forced account delete failure');
+      END;
+    `);
+
+    try {
+      expect(() => authService.deleteAccount(user)).toThrowError();
+    } finally {
+      db.exec("DROP TRIGGER IF EXISTS FailDeltaDelete");
+    }
+
+    expect(db.prepare("SELECT id FROM User WHERE id = ?").get(user.id)).toBeTruthy();
+    expect(db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(file.id)).toBeTruthy();
+    expect(fs.existsSync(filePath)).toBe(true);
+  });
+
+  it("keeps the account unchanged when attachment staging fails", async () => {
+    const user = authService.createUser(admin(), {
+      username: "echo",
+      password: "Echo999",
+    });
+    const file = await rawNoteFileService.create(
+      user.id,
+      new File([new Uint8Array([7, 8, 9])], "stage.txt", { type: "text/plain" }),
+    );
+    const rename = vi.spyOn(fs, "renameSync").mockImplementationOnce(() => {
+      throw new Error("forced rename failure");
+    });
+
+    try {
+      expect(() => authService.deleteAccount(user)).toThrowError("forced rename failure");
+    } finally {
+      rename.mockRestore();
+    }
+
+    expect(db.prepare("SELECT id FROM User WHERE id = ?").get(user.id)).toBeTruthy();
+    expect(db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(file.id)).toBeTruthy();
+    expect(fs.existsSync(path.join(testDir, "note-files", `${file.id}.txt`))).toBe(true);
   });
 });

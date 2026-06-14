@@ -10,8 +10,8 @@ export const usernameSchema = z
 
 export const passwordSchema = z
   .string()
-  .min(12, "密码至少需要 12 个字符")
-  .max(12, "密码不能超过 12 个字符");
+  .min(6, "密码至少需要 6 个字符")
+  .max(32, "密码不能超过 32 个字符");
 
 export const loginSchema = z.object({
   username: usernameSchema,
