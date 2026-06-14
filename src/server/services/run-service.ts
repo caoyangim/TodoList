@@ -35,7 +35,7 @@ type RunNodeRow = Omit<RunNodeDto, "isRequired" | "isParent" | "note"> & {
   isRequired: number;
 };
 
-function parseNote(value: string | null): NoteContentDto | null {
+function parseNote(userId: string, value: string | null): NoteContentDto | null {
   if (!value) return null;
 
   let parsed: { html?: string; text?: string; fileIds?: string[]; imageIds?: string[] };
@@ -55,12 +55,12 @@ function parseNote(value: string | null): NoteContentDto | null {
     html: parsed.html
       ? sanitizeNoteHtml(parsed.html).html
       : plainTextToNoteHtml(parsed.text ?? ""),
-    files: noteFileService.getMany(ids),
+    files: noteFileService.getMany(userId, ids),
   };
 }
 
-function getRun(id: string): RunDto | null {
-  const run = db.prepare("SELECT * FROM SopRun WHERE id = ?").get(id) as RunRow | undefined;
+function getRun(userId: string, id: string): RunDto | null {
+  const run = db.prepare("SELECT * FROM SopRun WHERE id = ? AND userId = ?").get(id, userId) as RunRow | undefined;
   if (!run) return null;
 
   const rows = db.prepare(`
@@ -71,7 +71,7 @@ function getRun(id: string): RunDto | null {
   const parentIds = new Set(rows.map((node) => node.parentId).filter(Boolean));
   const nodes: RunNodeDto[] = rows.map((node) => ({
     ...node,
-    note: parseNote(node.note),
+    note: parseNote(userId, node.note),
     isRequired: Boolean(node.isRequired),
     isParent: parentIds.has(node.id),
   }));
@@ -106,7 +106,7 @@ function getRun(id: string): RunDto | null {
   };
 }
 
-function recalculateRun(run: RunDto, now: string) {
+function recalculateRun(userId: string, run: RunDto, now: string) {
   const leaves = run.nodes.filter((node) => !node.isParent);
   const requiredLeaves = leaves.filter((node) => node.isRequired);
   const completionTargets = requiredLeaves.length > 0 ? requiredLeaves : leaves;
@@ -114,12 +114,13 @@ function recalculateRun(run: RunDto, now: string) {
   const allTargetsCompleted =
     completionTargets.length > 0 && completionTargets.every((node) => node.completedAt);
 
-  db.prepare("UPDATE SopRun SET startedAt = ?, completedAt = ?, updatedAt = ? WHERE id = ?")
+  db.prepare("UPDATE SopRun SET startedAt = ?, completedAt = ?, updatedAt = ? WHERE id = ? AND userId = ?")
     .run(
       anyCompleted ? run.startedAt ?? now : null,
       allTargetsCompleted ? run.completedAt ?? now : null,
       now,
       run.id,
+      userId,
     );
 }
 
@@ -159,20 +160,20 @@ function recalculateParents(runId: string, now: string) {
 }
 
 export const runService = {
-  async list() {
-    const rows = db.prepare("SELECT id FROM SopRun ORDER BY updatedAt DESC").all() as { id: string }[];
-    return rows.map((row) => getRun(row.id) as RunDto);
+  async list(userId: string) {
+    const rows = db.prepare("SELECT id FROM SopRun WHERE userId = ? ORDER BY updatedAt DESC").all(userId) as { id: string }[];
+    return rows.map((row) => getRun(userId, row.id) as RunDto);
   },
 
-  async get(id: string) {
-    const run = getRun(id);
+  async get(userId: string, id: string) {
+    const run = getRun(userId, id);
     if (!run) throw new AppError("RUN_NOT_FOUND", "执行实例不存在", 404);
     return run;
   },
 
-  async create(input: unknown) {
+  async create(userId: string, input: unknown) {
     const data = runInputSchema.parse(input);
-    const template = db.prepare("SELECT * FROM SopTemplate WHERE id = ?").get(data.templateId) as
+    const template = db.prepare("SELECT * FROM SopTemplate WHERE id = ? AND userId = ?").get(data.templateId, userId) as
       | { id: string; name: string; description: string | null }
       | undefined;
     if (!template) throw new AppError("TEMPLATE_NOT_FOUND", "SOP 模板不存在", 404);
@@ -195,10 +196,10 @@ export const runService = {
     db.transaction(() => {
       db.prepare(`
         INSERT INTO SopRun (
-          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          id, userId, templateId, templateNameSnapshot, templateDescriptionSnapshot,
           title, version, startedAt, completedAt, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-      `).run(id, template.id, template.name, template.description, data.title, data.version, now, now);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      `).run(id, userId, template.id, template.name, template.description, data.title, data.version, now, now);
       const insert = db.prepare(`
         INSERT INTO SopRunNode (
           id, runId, nameSnapshot, descriptionSnapshot, note, sortOrder,
@@ -220,11 +221,11 @@ export const runService = {
         ),
       );
     })();
-    return this.get(id);
+    return this.get(userId, id);
   },
 
-  async setNodeCompletion(runId: string, nodeId: string, completed: boolean) {
-    const run = await this.get(runId);
+  async setNodeCompletion(userId: string, runId: string, nodeId: string, completed: boolean) {
+    const run = await this.get(userId, runId);
     const node = run.nodes.find((item) => item.id === nodeId);
     if (!node) throw new AppError("RUN_NODE_NOT_FOUND", "执行节点不存在", 404);
     if (node.isParent) {
@@ -247,14 +248,14 @@ export const runService = {
         `).run(completed ? now : null, completed ? 1 : 0, now, now, now, nodeId);
       }
       recalculateParents(runId, now);
-      recalculateRun(getRun(runId) as RunDto, now);
+      recalculateRun(userId, getRun(userId, runId) as RunDto, now);
     })();
-    return this.get(runId);
+    return this.get(userId, runId);
   },
 
-  async setNodeNote(runId: string, nodeId: string, input: unknown) {
+  async setNodeNote(userId: string, runId: string, nodeId: string, input: unknown) {
     const data = runNodeNoteSchema.parse(input);
-    const run = await this.get(runId);
+    const run = await this.get(userId, runId);
     if (!run.nodes.some((node) => node.id === nodeId)) {
       throw new AppError("RUN_NODE_NOT_FOUND", "执行节点不存在", 404);
     }
@@ -266,7 +267,7 @@ export const runService = {
       data.note && content && (!content.isEmpty || data.note.fileIds.length > 0)
         ? JSON.stringify({
             html: content.html,
-            fileIds: noteFileService.getMany(data.note.fileIds).map((f) => f.id),
+            fileIds: noteFileService.getMany(userId, data.note.fileIds).map((f) => f.id),
           })
         : null;
     const now = new Date().toISOString();
@@ -279,38 +280,39 @@ export const runService = {
       );
       db.prepare("UPDATE SopRun SET updatedAt = ? WHERE id = ?").run(now, runId);
     })();
-    return this.get(runId);
+    return this.get(userId, runId);
   },
 
-  async setArchived(id: string, input: unknown) {
+  async setArchived(userId: string, id: string, input: unknown) {
     const data = runArchiveSchema.parse(input);
-    await this.get(id);
+    await this.get(userId, id);
     const now = new Date().toISOString();
-    db.prepare("UPDATE SopRun SET archivedAt = ?, updatedAt = ? WHERE id = ?").run(
+    db.prepare("UPDATE SopRun SET archivedAt = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(
       data.archived ? now : null,
       now,
       id,
+      userId,
     );
-    return this.get(id);
+    return this.get(userId, id);
   },
 
-  async setTitle(id: string, input: unknown) {
+  async setTitle(userId: string, id: string, input: unknown) {
     const data = runTitleSchema.parse(input);
-    await this.get(id);
+    await this.get(userId, id);
     const now = new Date().toISOString();
-    db.prepare("UPDATE SopRun SET title = ?, updatedAt = ? WHERE id = ?").run(data.title, now, id);
-    return this.get(id);
+    db.prepare("UPDATE SopRun SET title = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(data.title, now, id, userId);
+    return this.get(userId, id);
   },
 
-  async update(id: string, input: unknown) {
+  async update(userId: string, id: string, input: unknown) {
     const data = runUpdateSchema.parse(input);
-    return "archived" in data ? this.setArchived(id, data) : this.setTitle(id, data);
+    return "archived" in data ? this.setArchived(userId, id, data) : this.setTitle(userId, id, data);
   },
 
-  async remove(id: string) {
-    await this.get(id);
+  async remove(userId: string, id: string) {
+    await this.get(userId, id);
     db.transaction(() => {
-      db.prepare("DELETE FROM SopRun WHERE id = ?").run(id);
+      db.prepare("DELETE FROM SopRun WHERE id = ? AND userId = ?").run(id, userId);
     })();
   },
 };

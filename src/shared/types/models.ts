@@ -54,6 +54,21 @@ export type NoteContentDto = {
   files: NoteFileDto[];
 };
 
+export type UserRole = "ADMIN" | "USER";
+
+export type CurrentUserDto = {
+  id: string;
+  username: string;
+  role: UserRole;
+  mustChangePassword: boolean;
+};
+
+export type AdminUserDto = CurrentUserDto & {
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type RunNodeDto = {
   id: string;
   name: string;

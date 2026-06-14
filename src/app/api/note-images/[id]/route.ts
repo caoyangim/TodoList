@@ -1,14 +1,16 @@
 import { fail, noContent } from "@/server/http";
 import { noteImageService } from "@/server/services/note-image-service";
+import { assertSameOrigin, getRequestUser } from "@/server/auth/request";
 
 type Context = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
-    const image = await noteImageService.get((await context.params).id);
+    const user = getRequestUser(request);
+    const image = await noteImageService.get(user.id, (await context.params).id);
     return new Response(image.bytes, {
       headers: {
-        "Cache-Control": "private, max-age=31536000, immutable",
+        "Cache-Control": "private, no-store",
         "Content-Length": String(image.size),
         "Content-Type": image.mimeType,
       },
@@ -18,9 +20,11 @@ export async function GET(_: Request, context: Context) {
   }
 }
 
-export async function DELETE(_: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
   try {
-    await noteImageService.remove((await context.params).id);
+    assertSameOrigin(request);
+    const user = getRequestUser(request);
+    await noteImageService.remove(user.id, (await context.params).id);
     return noContent();
   } catch (error) {
     return fail(error);

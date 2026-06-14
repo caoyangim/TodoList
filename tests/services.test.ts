@@ -6,20 +6,66 @@ const testDir = path.resolve(process.cwd(), "data-test");
 const testDb = path.join(testDir, "todoflow-test.db");
 process.env.DATABASE_URL = `file:${testDb}`;
 process.env.NOTE_FILE_DIR = path.join(testDir, "note-files");
+process.env.TODOFLOW_ADMIN_USERNAME = "admin";
+process.env.TODOFLOW_ADMIN_PASSWORD = "todoflow-test-password";
 
-let todoService: typeof import("@/server/services/todo-service").todoService;
-let templateService: typeof import("@/server/services/template-service").templateService;
-let runService: typeof import("@/server/services/run-service").runService;
-let noteFileService: typeof import("@/server/services/note-file-service").noteFileService;
+let rawTodoService: typeof import("@/server/services/todo-service").todoService;
+let rawTemplateService: typeof import("@/server/services/template-service").templateService;
+let rawRunService: typeof import("@/server/services/run-service").runService;
+let rawNoteFileService: typeof import("@/server/services/note-file-service").noteFileService;
+let authService: typeof import("@/server/services/auth-service").authService;
 let db: typeof import("@/server/db").db;
+let testUserId: string;
+
+const todoService = {
+  list: (status?: unknown) => rawTodoService.list(testUserId, status),
+  get: (id: string) => rawTodoService.get(testUserId, id),
+  create: (input: unknown) => rawTodoService.create(testUserId, input),
+  update: (id: string, input: unknown) => rawTodoService.update(testUserId, id, input),
+  remove: (id: string) => rawTodoService.remove(testUserId, id),
+  setNote: (id: string, input: unknown) => rawTodoService.setNote(testUserId, id, input),
+  setStatus: (id: string, input: unknown) => rawTodoService.setStatus(testUserId, id, input),
+};
+
+const templateService = {
+  list: () => rawTemplateService.list(testUserId),
+  get: (id: string) => rawTemplateService.get(testUserId, id),
+  create: (input: unknown) => rawTemplateService.create(testUserId, input),
+  update: (id: string, input: unknown) => rawTemplateService.update(testUserId, id, input),
+  remove: (id: string) => rawTemplateService.remove(testUserId, id),
+};
+
+const runService = {
+  list: () => rawRunService.list(testUserId),
+  get: (id: string) => rawRunService.get(testUserId, id),
+  create: (input: unknown) => rawRunService.create(testUserId, input),
+  setNodeCompletion: (runId: string, nodeId: string, completed: boolean) =>
+    rawRunService.setNodeCompletion(testUserId, runId, nodeId, completed),
+  setNodeNote: (runId: string, nodeId: string, input: unknown) =>
+    rawRunService.setNodeNote(testUserId, runId, nodeId, input),
+  setArchived: (id: string, input: unknown) =>
+    rawRunService.setArchived(testUserId, id, input),
+  setTitle: (id: string, input: unknown) => rawRunService.setTitle(testUserId, id, input),
+  remove: (id: string) => rawRunService.remove(testUserId, id),
+};
+
+const noteFileService = {
+  create: (file: File) => rawNoteFileService.create(testUserId, file),
+  get: (id: string) => rawNoteFileService.get(testUserId, id),
+  remove: (id: string) => rawNoteFileService.remove(testUserId, id),
+};
 
 beforeAll(async () => {
   fs.rmSync(testDir, { recursive: true, force: true });
   ({ db } = await import("@/server/db"));
-  ({ todoService } = await import("@/server/services/todo-service"));
-  ({ templateService } = await import("@/server/services/template-service"));
-  ({ runService } = await import("@/server/services/run-service"));
-  ({ noteFileService } = await import("@/server/services/note-file-service"));
+  ({ todoService: rawTodoService } = await import("@/server/services/todo-service"));
+  ({ templateService: rawTemplateService } = await import("@/server/services/template-service"));
+  ({ runService: rawRunService } = await import("@/server/services/run-service"));
+  ({ noteFileService: rawNoteFileService } = await import("@/server/services/note-file-service"));
+  ({ authService } = await import("@/server/services/auth-service"));
+  testUserId = (
+    db.prepare("SELECT id FROM User WHERE username = ?").get("admin") as { id: string }
+  ).id;
 });
 
 afterAll(() => {
@@ -399,5 +445,144 @@ describe("SOP service", () => {
     expect(renamed.templateName).toBe("上线流程");
     expect(renamed.version).toBeNull();
     expect(renamed.nodes[0].name).toBe("发布");
+  });
+});
+
+describe("Authentication and data isolation", () => {
+  const admin = () => ({
+    id: testUserId,
+    username: "admin",
+    role: "ADMIN" as const,
+    mustChangePassword: false,
+  });
+
+  it("creates a user, requires a password change and revokes old sessions", async () => {
+    const user = authService.createUser(admin(), {
+      username: "alice",
+      password: "AlicePass123",
+    });
+    expect(user.mustChangePassword).toBe(true);
+
+    const loggedIn = await authService.login(
+      { username: "alice", password: "AlicePass123" },
+      "login-test",
+    );
+    expect(authService.authenticate(loggedIn.token)?.id).toBe(user.id);
+    const sessionBefore = db
+      .prepare("SELECT id, expiresAt FROM Session WHERE userId = ?")
+      .get(user.id) as { id: string; expiresAt: string };
+    db.prepare("UPDATE Session SET lastUsedAt = ? WHERE id = ?").run(
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      sessionBefore.id,
+    );
+    expect(authService.authenticate(loggedIn.token)?.id).toBe(user.id);
+    const refreshedExpiry = (
+      db.prepare("SELECT expiresAt FROM Session WHERE id = ?").get(sessionBefore.id) as {
+        expiresAt: string;
+      }
+    ).expiresAt;
+    expect(new Date(refreshedExpiry).getTime()).toBeGreaterThan(
+      new Date(sessionBefore.expiresAt).getTime(),
+    );
+
+    authService.changePassword(user.id, {
+      currentPassword: "AlicePass123",
+      newPassword: "AliceNew1234",
+    });
+    expect(authService.authenticate(loggedIn.token)).toBeNull();
+
+    const relogged = await authService.login(
+      { username: "alice", password: "AliceNew1234" },
+      "login-test",
+    );
+    expect(relogged.user.mustChangePassword).toBe(false);
+  });
+
+  it("isolates todos, templates, runs and files between users", async () => {
+    const alice = authService.listUsers(admin()).find((user) => user.username === "alice")!;
+    const bob = authService.createUser(admin(), {
+      username: "bob",
+      password: "BobPass12345",
+    });
+
+    const aliceTodo = await rawTodoService.create(alice.id, {
+      title: "Alice Todo",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    await rawTodoService.create(bob.id, {
+      title: "Bob Todo",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+    expect((await rawTodoService.list(alice.id, "all")).map((todo) => todo.title)).toContain(
+      "Alice Todo",
+    );
+    expect((await rawTodoService.list(alice.id, "all")).map((todo) => todo.title)).not.toContain(
+      "Bob Todo",
+    );
+    await expect(rawTodoService.get(bob.id, aliceTodo.id)).rejects.toMatchObject({ status: 404 });
+
+    const template = await rawTemplateService.create(alice.id, {
+      name: "Alice Template",
+      description: null,
+      nodes: [{ name: "Step", description: null, sortOrder: 1, isRequired: true, parentId: null }],
+    });
+    await expect(
+      rawRunService.create(bob.id, {
+        templateId: template.id,
+        title: "Cross-user run",
+        version: null,
+      }),
+    ).rejects.toMatchObject({ code: "TEMPLATE_NOT_FOUND", status: 404 });
+
+    const file = await rawNoteFileService.create(
+      alice.id,
+      new File([new Uint8Array([1, 2, 3])], "private.txt", { type: "text/plain" }),
+    );
+    await expect(rawNoteFileService.get(bob.id, file.id)).rejects.toMatchObject({ status: 404 });
+    await expect(
+      rawTodoService.setNote(bob.id, (await rawTodoService.list(bob.id, "all"))[0].id, {
+        note: { html: "<p>cross user file</p>", fileIds: [file.id] },
+      }),
+    ).rejects.toMatchObject({ code: "NOTE_FILE_NOT_FOUND" });
+  });
+
+  it("revokes sessions when disabling users and prevents self-disable", async () => {
+    const bob = authService.listUsers(admin()).find((user) => user.username === "bob")!;
+    const session = await authService.login(
+      { username: "bob", password: "BobPass12345" },
+      "disable-test",
+    );
+    authService.updateUser(admin(), bob.id, { isActive: false });
+    expect(authService.authenticate(session.token)).toBeNull();
+    await expect(
+      authService.login(
+        { username: "bob", password: "BobPass12345" },
+        "disable-test",
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    expect(() => authService.updateUser(admin(), testUserId, { isActive: false })).toThrowError();
+  });
+
+  it("rate limits repeated failed login attempts", async () => {
+    for (let index = 0; index < 8; index += 1) {
+      await expect(
+        authService.login(
+          { username: "missing-user", password: "incorrect" },
+          "rate-limit-test",
+        ),
+      ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    }
+    await expect(
+      authService.login(
+        { username: "missing-user", password: "incorrect" },
+        "rate-limit-test",
+      ),
+    ).rejects.toMatchObject({ code: "LOGIN_RATE_LIMITED", status: 429 });
   });
 });

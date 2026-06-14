@@ -1,11 +1,13 @@
 import { fail, noContent, ok, readJson } from "@/server/http";
 import { todoService } from "@/server/services/todo-service";
+import { assertSameOrigin, getRequestUser } from "@/server/auth/request";
 
 type Context = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
-    return ok(await todoService.get((await context.params).id));
+    const user = getRequestUser(request);
+    return ok(await todoService.get(user.id, (await context.params).id));
   } catch (error) {
     return fail(error);
   }
@@ -13,15 +15,19 @@ export async function GET(_: Request, context: Context) {
 
 export async function PATCH(request: Request, context: Context) {
   try {
-    return ok(await todoService.update((await context.params).id, await readJson(request)));
+    assertSameOrigin(request);
+    const user = getRequestUser(request);
+    return ok(await todoService.update(user.id, (await context.params).id, await readJson(request)));
   } catch (error) {
     return fail(error);
   }
 }
 
-export async function DELETE(_: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
   try {
-    await todoService.remove((await context.params).id);
+    assertSameOrigin(request);
+    const user = getRequestUser(request);
+    await todoService.remove(user.id, (await context.params).id);
     return noContent();
   } catch (error) {
     return fail(error);

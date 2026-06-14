@@ -12,14 +12,15 @@ const maxFileSize = 10 * 1024 * 1024;
 
 type NoteFileRow = {
   id: string;
+  userId: string;
   mimeType: string;
   extension: string;
   size: number;
   originalName: string;
 };
 
-function getRow(id: string) {
-  return db.prepare("SELECT id, mimeType, extension, size, originalName FROM NoteFile WHERE id = ?").get(id) as
+function getRow(userId: string, id: string) {
+  return db.prepare("SELECT id, userId, mimeType, extension, size, originalName FROM NoteFile WHERE id = ? AND userId = ?").get(id, userId) as
     | NoteFileRow
     | undefined;
 }
@@ -35,7 +36,7 @@ function toDto(row: NoteFileRow): NoteFileDto {
 }
 
 export const noteFileService = {
-  async create(file: File) {
+  async create(userId: string, file: File) {
     if (file.size === 0 || file.size > maxFileSize) {
       throw new AppError("FILE_SIZE_INVALID", "文件大小必须在 10 MB 以内", 400);
     }
@@ -50,17 +51,17 @@ export const noteFileService = {
     fs.writeFileSync(filePath, Buffer.from(await file.arrayBuffer()));
     try {
       db.prepare(
-        "INSERT INTO NoteFile (id, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(id, file.type, extension, file.size, file.name, now);
+        "INSERT INTO NoteFile (id, userId, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(id, userId, file.type, extension, file.size, file.name, now);
     } catch (error) {
       fs.rmSync(filePath, { force: true });
       throw error;
     }
-    return toDto({ id, mimeType: file.type, extension, size: file.size, originalName: file.name });
+    return toDto({ id, userId, mimeType: file.type, extension, size: file.size, originalName: file.name });
   },
 
-  async get(id: string) {
-    const row = getRow(id);
+  async get(userId: string, id: string) {
+    const row = getRow(userId, id);
     if (!row) throw new AppError("NOTE_FILE_NOT_FOUND", "备注文件不存在", 404);
     const filename = row.extension ? `${row.id}.${row.extension}` : row.id;
     const filePath = path.join(fileDirectory, filename);
@@ -70,18 +71,18 @@ export const noteFileService = {
     return { ...row, bytes: fs.readFileSync(filePath) };
   },
 
-  getMany(ids: string[]) {
+  getMany(userId: string, ids: string[]) {
     return ids.map((id) => {
-      const row = getRow(id);
+      const row = getRow(userId, id);
       if (!row) throw new AppError("NOTE_FILE_NOT_FOUND", "备注包含不存在的文件", 400);
       return toDto(row);
     });
   },
 
-  async remove(id: string) {
-    const row = getRow(id);
+  async remove(userId: string, id: string) {
+    const row = getRow(userId, id);
     if (!row) return;
-    db.prepare("DELETE FROM NoteFile WHERE id = ?").run(id);
+    db.prepare("DELETE FROM NoteFile WHERE id = ? AND userId = ?").run(id, userId);
     const filename = row.extension ? `${row.id}.${row.extension}` : row.id;
     fs.rmSync(path.join(fileDirectory, filename), { force: true });
   },

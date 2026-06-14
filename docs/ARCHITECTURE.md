@@ -15,6 +15,9 @@ flowchart LR
     SHARED --> SERVICE
 ```
 
+页面与 REST API 之前增加服务端 Session 校验。登录态保存在 HttpOnly Cookie 中，
+数据库仅保存随机 Session Token 的 SHA-256 哈希。
+
 采用同域单进程的原因：
 
 - 本地部署简单。
@@ -79,12 +82,18 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 
 | 表 | 用途 |
 |---|---|
+| `User` | 用户名、密码哈希、角色和账号状态 |
+| `Session` | 90 天滑动会话及撤销状态 |
 | `Todo` | Todo 基础信息、完成状态与富备注 |
 | `SopTemplate` | SOP 模板 |
 | `SopTemplateNode` | 模板节点及父子关系 |
 | `SopRun` | 独立标题、可选版本号的执行实例和模板快照 |
 | `SopRunNode` | 执行节点快照、状态、备注和时间 |
 | `NoteImage` | 富备注图片元数据 |
+
+`Todo`、`SopTemplate`、`SopRun`、`NoteFile` 和兼容用 `NoteImage` 均保存
+`userId`。Service 会把资源 ID 与当前用户 ID 同时作为查询条件；跨用户访问统一
+表现为资源不存在。
 
 `SopRun.archivedAt` 用于区分未归档与已归档执行；删除 `SopRun` 时数据库外键会级联
 删除对应 `SopRunNode`。

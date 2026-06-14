@@ -18,13 +18,14 @@ const supportedTypes = new Map([
 
 type NoteImageRow = {
   id: string;
+  userId: string;
   mimeType: string;
   extension: string;
   size: number;
 };
 
-function getRow(id: string) {
-  return db.prepare("SELECT id, mimeType, extension, size FROM NoteImage WHERE id = ?").get(id) as
+function getRow(userId: string, id: string) {
+  return db.prepare("SELECT id, userId, mimeType, extension, size FROM NoteImage WHERE id = ? AND userId = ?").get(id, userId) as
     | NoteImageRow
     | undefined;
 }
@@ -40,7 +41,7 @@ function toDto(row: NoteImageRow): NoteImageDto {
 }
 
 export const noteImageService = {
-  async create(file: File) {
+  async create(userId: string, file: File) {
     const extension = supportedTypes.get(file.type);
     if (!extension) {
       throw new AppError("UNSUPPORTED_IMAGE_TYPE", "仅支持 PNG、JPEG、WebP 和 GIF 图片", 400);
@@ -56,17 +57,17 @@ export const noteImageService = {
     fs.writeFileSync(filePath, Buffer.from(await file.arrayBuffer()));
     try {
       db.prepare(
-        "INSERT INTO NoteImage (id, mimeType, extension, size, createdAt) VALUES (?, ?, ?, ?, ?)",
-      ).run(id, file.type, extension, file.size, now);
+        "INSERT INTO NoteImage (id, userId, mimeType, extension, size, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(id, userId, file.type, extension, file.size, now);
     } catch (error) {
       fs.rmSync(filePath, { force: true });
       throw error;
     }
-    return toDto({ id, mimeType: file.type, extension, size: file.size });
+    return toDto({ id, userId, mimeType: file.type, extension, size: file.size });
   },
 
-  async get(id: string) {
-    const row = getRow(id);
+  async get(userId: string, id: string) {
+    const row = getRow(userId, id);
     if (!row) throw new AppError("NOTE_IMAGE_NOT_FOUND", "备注图片不存在", 404);
     const filePath = path.join(imageDirectory, `${row.id}.${row.extension}`);
     if (!fs.existsSync(filePath)) {
@@ -75,18 +76,18 @@ export const noteImageService = {
     return { ...row, bytes: fs.readFileSync(filePath) };
   },
 
-  getMany(ids: string[]) {
+  getMany(userId: string, ids: string[]) {
     return ids.map((id) => {
-      const row = getRow(id);
+      const row = getRow(userId, id);
       if (!row) throw new AppError("NOTE_IMAGE_NOT_FOUND", "备注包含不存在的图片", 400);
       return toDto(row);
     });
   },
 
-  async remove(id: string) {
-    const row = getRow(id);
+  async remove(userId: string, id: string) {
+    const row = getRow(userId, id);
     if (!row) return;
-    db.prepare("DELETE FROM NoteImage WHERE id = ?").run(id);
+    db.prepare("DELETE FROM NoteImage WHERE id = ? AND userId = ?").run(id, userId);
     fs.rmSync(path.join(imageDirectory, `${row.id}.${row.extension}`), { force: true });
   },
 };

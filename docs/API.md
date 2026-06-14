@@ -1,6 +1,7 @@
 # TodoFlow REST API
 
-所有接口与前端同域，不配置 CORS。
+所有接口与前端同域，不配置 CORS。除登录接口外均要求有效的
+`todoflow_session` HttpOnly Cookie；业务资源只对其所属用户可见。
 
 ## 1. 通用约定
 
@@ -34,13 +35,37 @@
 | `201` | 创建成功 |
 | `204` | 删除成功 |
 | `400` | 输入校验失败 |
+| `401` | 未登录或登录凭证无效 |
+| `403` | 无权限或需要先修改临时密码 |
 | `404` | 资源不存在 |
 | `409` | 唯一约束或业务状态冲突 |
 | `500` | 未处理的服务端错误 |
 
 所有时间为 ISO 8601 UTC 字符串或 `null`。
 
-## 2. Todo
+## 2. 认证与账号
+
+```text
+POST  /api/auth/login
+POST  /api/auth/logout
+GET   /api/auth/me
+PATCH /api/auth/password
+```
+
+登录提交 `{ "username": "...", "password": "..." }`。临时密码首次登录后必须修改，
+修改成功会撤销该用户所有会话。会话有效期为 90 天，活跃使用时续期。
+
+管理员账号接口：
+
+```text
+GET   /api/admin/users
+POST  /api/admin/users
+PATCH /api/admin/users/:id
+```
+
+管理员可创建账号、重置临时密码和启停账号；不提供公开注册或永久删除。
+
+## 3. Todo
 
 ### 查询列表
 
@@ -118,7 +143,7 @@ PATCH /api/todos/:id/note
 - 正文和图片都为空，或提交 `null`，会清空备注。
 - 更新备注不改变 Todo 状态。
 
-## 3. SOP 模板
+## 4. SOP 模板
 
 ```text
 GET    /api/templates
@@ -161,7 +186,7 @@ DELETE /api/templates/:id
 
 - `TEMPLATE_IN_USE`：模板已有执行记录，不能删除。
 
-## 4. SOP 执行
+## 5. SOP 执行
 
 ### 查询
 

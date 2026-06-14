@@ -12,6 +12,8 @@ export async function uploadNoteImage(file: File) {
   const payload = (await response.json()) as ApiSuccess<NoteImageDto> | ApiFailure;
   if (!response.ok || "error" in payload) {
     const error = "error" in payload ? payload.error : { code: "UNKNOWN", message: "图片上传失败" };
+    if (response.status === 401) window.location.assign("/login");
+    if (error.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-password");
     throw new ApiClientError(error.message, error.code, response.status, error.fields);
   }
   return payload.data;

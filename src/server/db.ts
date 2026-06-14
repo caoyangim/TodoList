@@ -1,6 +1,8 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "@/server/auth/password";
 
 const databaseUrl = process.env.DATABASE_URL ?? "file:./data/todoflow.db";
 const databasePath = databaseUrl.replace(/^file:/, "");
@@ -14,8 +16,32 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS User (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    passwordHash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'USER' CHECK(role IN ('ADMIN', 'USER')),
+    isActive INTEGER NOT NULL DEFAULT 1,
+    mustChangePassword INTEGER NOT NULL DEFAULT 1,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS Session (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    tokenHash TEXT NOT NULL UNIQUE,
+    expiresAt TEXT NOT NULL,
+    lastUsedAt TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    FOREIGN KEY(userId) REFERENCES User(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS Session_userId_idx ON Session(userId);
+  CREATE INDEX IF NOT EXISTS Session_expiresAt_idx ON Session(expiresAt);
+
   CREATE TABLE IF NOT EXISTS Todo (
     id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT,
     note TEXT,
@@ -34,6 +60,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS SopTemplate (
     id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     description TEXT,
     createdAt TEXT NOT NULL,
@@ -54,6 +81,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS SopRun (
     id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
     templateId TEXT NOT NULL,
     templateNameSnapshot TEXT NOT NULL,
     templateDescriptionSnapshot TEXT,
@@ -70,6 +98,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS NoteImage (
     id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
     mimeType TEXT NOT NULL,
     extension TEXT NOT NULL,
     size INTEGER NOT NULL,
@@ -78,6 +107,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS NoteFile (
     id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
     mimeType TEXT NOT NULL,
     extension TEXT NOT NULL,
     size INTEGER NOT NULL,
@@ -116,6 +146,11 @@ function ensureColumn(table: string, column: string, definition: string) {
 }
 
 ensureColumn("SopTemplateNode", "isRequired", "INTEGER NOT NULL DEFAULT 1");
+ensureColumn("Todo", "userId", "TEXT");
+ensureColumn("SopTemplate", "userId", "TEXT");
+ensureColumn("SopRun", "userId", "TEXT");
+ensureColumn("NoteImage", "userId", "TEXT");
+ensureColumn("NoteFile", "userId", "TEXT");
 ensureColumn("SopTemplateNode", "parentId", "TEXT");
 ensureColumn("SopRunNode", "isRequired", "INTEGER NOT NULL DEFAULT 1");
 ensureColumn("SopRunNode", "parentId", "TEXT");
@@ -163,6 +198,7 @@ function migrateSopRunVersionConstraint() {
       db.exec(`
         CREATE TABLE SopRun_new (
           id TEXT PRIMARY KEY,
+          userId TEXT,
           templateId TEXT NOT NULL,
           templateNameSnapshot TEXT NOT NULL,
           templateDescriptionSnapshot TEXT,
@@ -177,11 +213,11 @@ function migrateSopRunVersionConstraint() {
         );
 
         INSERT INTO SopRun_new (
-          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          id, userId, templateId, templateNameSnapshot, templateDescriptionSnapshot,
           title, version, startedAt, completedAt, archivedAt, createdAt, updatedAt
         )
         SELECT
-          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          id, userId, templateId, templateNameSnapshot, templateDescriptionSnapshot,
           title, NULLIF(TRIM(version), ''), startedAt, completedAt, archivedAt, createdAt, updatedAt
         FROM SopRun;
 
@@ -198,6 +234,36 @@ function migrateSopRunVersionConstraint() {
 }
 
 migrateSopRunVersionConstraint();
+
+function ensureInitialAdmin() {
+  const existing = db.prepare("SELECT id FROM User ORDER BY createdAt LIMIT 1").get() as
+    | { id: string }
+    | undefined;
+  if (existing) return existing.id;
+
+  const username = (process.env.TODOFLOW_ADMIN_USERNAME ?? "").trim().toLowerCase();
+  const password = process.env.TODOFLOW_ADMIN_PASSWORD ?? "";
+  if (!username || !password) {
+    throw new Error(
+      "首次启动必须设置 TODOFLOW_ADMIN_USERNAME 和 TODOFLOW_ADMIN_PASSWORD",
+    );
+  }
+
+  if (!/^[a-z0-9._-]{3,32}$/.test(username) || password.length < 12) {
+    throw new Error("初始化管理员用户名或密码不符合安全要求");
+  }
+
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO User (
+      id, username, passwordHash, role, isActive, mustChangePassword, createdAt, updatedAt
+    ) VALUES (?, ?, ?, 'ADMIN', 1, 0, ?, ?)
+  `).run(id, username, hashPassword(password), now, now);
+  return id;
+}
+
+const initialAdminId = ensureInitialAdmin();
 
 db.exec(`
   UPDATE Todo
@@ -253,11 +319,11 @@ if (noteFileCount === 0) {
     const newDir = path.resolve(process.cwd(), "data", "note-files");
     fs.mkdirSync(newDir, { recursive: true });
     const insert = db.prepare(
-      "INSERT INTO NoteFile (id, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO NoteFile (id, userId, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
     const insertMany = db.transaction(() => {
       for (const row of oldImages) {
-        insert.run(row.id, row.mimeType, row.extension, row.size, `${row.id}.${row.extension}`, row.createdAt);
+        insert.run(row.id, initialAdminId, row.mimeType, row.extension, row.size, `${row.id}.${row.extension}`, row.createdAt);
         const oldPath = path.join(oldDir, `${row.id}.${row.extension}`);
         const newPath = path.join(newDir, `${row.id}.${row.extension}`);
         if (fs.existsSync(oldPath)) {
@@ -298,5 +364,19 @@ if (noteFileCount === 0) {
     updateNotes();
   }
 }
+
+db.transaction(() => {
+  for (const table of ["Todo", "SopTemplate", "SopRun", "NoteImage", "NoteFile"]) {
+    db.prepare(`UPDATE ${table} SET userId = ? WHERE userId IS NULL`).run(initialAdminId);
+  }
+})();
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS Todo_userId_idx ON Todo(userId);
+  CREATE INDEX IF NOT EXISTS SopTemplate_userId_idx ON SopTemplate(userId);
+  CREATE INDEX IF NOT EXISTS SopRun_userId_idx ON SopRun(userId);
+  CREATE INDEX IF NOT EXISTS NoteImage_userId_idx ON NoteImage(userId);
+  CREATE INDEX IF NOT EXISTS NoteFile_userId_idx ON NoteFile(userId);
+`);
 
 if (process.env.NODE_ENV !== "production") globalForDb.todoFlowDb = db;

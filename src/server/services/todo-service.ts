@@ -16,15 +16,16 @@ import {
 import { NoteContentDto, TodoDto } from "@/shared/types/models";
 
 type TodoRow = Omit<TodoDto, "note" | "verificationReport"> & {
+  userId: string;
   note: string | null;
   verificationReport: string | null;
 };
 
-function getTodoRow(id: string) {
-  return db.prepare("SELECT * FROM Todo WHERE id = ?").get(id) as TodoRow | undefined;
+function getTodoRow(userId: string, id: string) {
+  return db.prepare("SELECT * FROM Todo WHERE id = ? AND userId = ?").get(id, userId) as TodoRow | undefined;
 }
 
-function parseRichContent(value: string | null): NoteContentDto | null {
+function parseRichContent(userId: string, value: string | null): NoteContentDto | null {
   if (!value) return null;
   let parsed: { html?: string; text?: string; fileIds?: string[]; imageIds?: string[] };
   try {
@@ -42,19 +43,21 @@ function parseRichContent(value: string | null): NoteContentDto | null {
     html: parsed.html
       ? sanitizeNoteHtml(parsed.html).html
       : plainTextToNoteHtml(parsed.text ?? ""),
-    files: noteFileService.getMany(ids),
+    files: noteFileService.getMany(userId, ids),
   };
 }
 
-function toTodoDto(row: TodoRow): TodoDto {
+function toTodoDto(userId: string, row: TodoRow): TodoDto {
+  const { userId: ownerId, ...todo } = row;
+  void ownerId;
   return {
-    ...row,
-    note: parseRichContent(row.note),
-    verificationReport: parseRichContent(row.verificationReport),
+    ...todo,
+    note: parseRichContent(userId, row.note),
+    verificationReport: parseRichContent(userId, row.verificationReport),
   };
 }
 
-function serializeRichContent(input: { html: string; fileIds: string[] } | null) {
+function serializeRichContent(userId: string, input: { html: string; fileIds: string[] } | null) {
   if (!input) return null;
   const content = sanitizeNoteHtml(input.html);
   if (content.textLength > 2000) {
@@ -63,21 +66,21 @@ function serializeRichContent(input: { html: string; fileIds: string[] } | null)
   return !content.isEmpty || input.fileIds.length > 0
     ? JSON.stringify({
         html: content.html,
-        fileIds: noteFileService.getMany(input.fileIds).map((file) => file.id),
+        fileIds: noteFileService.getMany(userId, input.fileIds).map((file) => file.id),
       })
     : null;
 }
 
 export const todoService = {
-  async list(status: unknown) {
+  async list(userId: string, status: unknown) {
     const parsedStatus = todoListStatusSchema.parse(status ?? "pending");
     const where =
       parsedStatus === "resolved"
-        ? "WHERE status = 'RESOLVED'"
+        ? "AND status = 'RESOLVED'"
         : parsedStatus === "completed"
-          ? "WHERE status = 'COMPLETED'"
+          ? "AND status = 'COMPLETED'"
           : parsedStatus === "pending"
-            ? "WHERE status = 'PENDING'"
+            ? "AND status = 'PENDING'"
             : "";
     const orderBy = `
       ORDER BY
@@ -91,18 +94,18 @@ export const todoService = {
     `;
     return (
       db
-      .prepare(`SELECT * FROM Todo ${where} ${orderBy}`)
-        .all() as TodoRow[]
-    ).map(toTodoDto);
+      .prepare(`SELECT * FROM Todo WHERE userId = ? ${where} ${orderBy}`)
+        .all(userId) as TodoRow[]
+    ).map((row) => toTodoDto(userId, row));
   },
 
-  async get(id: string) {
-    const todo = getTodoRow(id);
+  async get(userId: string, id: string) {
+    const todo = getTodoRow(userId, id);
     if (!todo) throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
-    return toTodoDto(todo);
+    return toTodoDto(userId, todo);
   },
 
-  async create(input: unknown) {
+  async create(userId: string, input: unknown) {
     const data = todoInputSchema.parse(input);
     const now = new Date().toISOString();
     const todo: TodoDto = {
@@ -121,17 +124,17 @@ export const todoService = {
     };
     db.prepare(`
       INSERT INTO Todo (
-        id, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
+        id, userId, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
       )
       VALUES (
-        @id, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
+        @id, @userId, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
       )
-    `).run(todo);
+    `).run({ ...todo, userId });
     return todo;
   },
 
-  async update(id: string, input: unknown) {
-    const current = await this.get(id);
+  async update(userId: string, id: string, input: unknown) {
+    const current = await this.get(userId, id);
     const data = todoPatchSchema.parse(input);
     const next: TodoDto = {
       ...current,
@@ -142,28 +145,28 @@ export const todoService = {
     db.prepare(`
       UPDATE Todo SET title=@title, description=@description, priority=@importancePriority,
       timePriority=@timePriority, importancePriority=@importancePriority,
-      dueAt=@dueAt, updatedAt=@updatedAt WHERE id=@id
-    `).run(next);
+      dueAt=@dueAt, updatedAt=@updatedAt WHERE id=@id AND userId=@userId
+    `).run({ ...next, userId });
     return next;
   },
 
-  async remove(id: string) {
-    if (db.prepare("DELETE FROM Todo WHERE id = ?").run(id).changes === 0) {
+  async remove(userId: string, id: string) {
+    if (db.prepare("DELETE FROM Todo WHERE id = ? AND userId = ?").run(id, userId).changes === 0) {
       throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
     }
   },
 
-  async setNote(id: string, input: unknown) {
-    await this.get(id);
+  async setNote(userId: string, id: string, input: unknown) {
+    await this.get(userId, id);
     const data = todoNoteSchema.parse(input);
-    const note = serializeRichContent(data.note);
+    const note = serializeRichContent(userId, data.note);
     const updatedAt = new Date().toISOString();
-    db.prepare("UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ?").run(note, updatedAt, id);
-    return this.get(id);
+    db.prepare("UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(note, updatedAt, id, userId);
+    return this.get(userId, id);
   },
 
-  async setStatus(id: string, input: unknown) {
-    const current = await this.get(id);
+  async setStatus(userId: string, id: string, input: unknown) {
+    const current = await this.get(userId, id);
     const data = todoTransitionSchema.parse(input);
     if (current.status === data.status) return current;
     if (current.status === "PENDING" && data.status !== "RESOLVED") {
@@ -180,20 +183,21 @@ export const todoService = {
     }
 
     const verificationReport =
-      data.status === "COMPLETED" ? serializeRichContent(data.verificationReport ?? null) : null;
+      data.status === "COMPLETED" ? serializeRichContent(userId, data.verificationReport ?? null) : null;
     const completedAt = data.status === "COMPLETED" ? new Date().toISOString() : null;
     const updatedAt = new Date().toISOString();
-    db.prepare("UPDATE Todo SET status = ?, verificationReport = ?, completedAt = ?, updatedAt = ? WHERE id = ?").run(
+    db.prepare("UPDATE Todo SET status = ?, verificationReport = ?, completedAt = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(
       data.status,
       verificationReport,
       completedAt,
       updatedAt,
       id,
+      userId,
     );
     return {
       ...current,
       status: data.status,
-      verificationReport: data.status === "COMPLETED" ? parseRichContent(verificationReport) : null,
+      verificationReport: data.status === "COMPLETED" ? parseRichContent(userId, verificationReport) : null,
       completedAt,
       updatedAt,
     };

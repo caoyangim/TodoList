@@ -19,8 +19,45 @@ enum TodoStatus {
   COMPLETED
 }
 
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id                 String        @id @default(cuid())
+  username           String        @unique
+  passwordHash       String
+  role               UserRole      @default(USER)
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(true)
+  sessions           Session[]
+  todos              Todo[]
+  templates          SopTemplate[]
+  runs               SopRun[]
+  noteFiles          NoteFile[]
+  noteImages         NoteImage[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  lastUsedAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model Todo {
   id                 String       @id @default(cuid())
+  userId             String
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   title              String
   description        String?
   note               String?
@@ -35,16 +72,21 @@ model Todo {
 
   @@index([completedAt])
   @@index([dueAt])
+  @@index([userId])
 }
 
 model SopTemplate {
   id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   description String?
   nodes       SopTemplateNode[]
   runs        SopRun[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+
+  @@index([userId])
 }
 
 model SopTemplateNode {
@@ -66,6 +108,8 @@ model SopTemplateNode {
 
 model SopRun {
   id                          String       @id @default(cuid())
+  userId                      String
+  user                        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   templateId                  String
   template                    SopTemplate  @relation(fields: [templateId], references: [id], onDelete: Restrict)
   templateNameSnapshot        String
@@ -81,6 +125,7 @@ model SopRun {
 
   @@index([completedAt])
   @@index([archivedAt])
+  @@index([userId])
 }
 
 model SopRunNode {
@@ -106,8 +151,25 @@ model SopRunNode {
 
 model NoteImage {
   id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   mimeType  String
   extension String
   size      Int
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model NoteFile {
+  id           String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mimeType     String
+  extension    String
+  size         Int
+  originalName String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
 }

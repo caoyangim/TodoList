@@ -1,14 +1,16 @@
 import { fail, noContent } from "@/server/http";
 import { noteFileService } from "@/server/services/note-file-service";
+import { assertSameOrigin, getRequestUser } from "@/server/auth/request";
 
 type Context = { params: Promise<{ id: string }> };
 
-export async function GET(_: Request, context: Context) {
+export async function GET(request: Request, context: Context) {
   try {
-    const file = await noteFileService.get((await context.params).id);
+    const user = getRequestUser(request);
+    const file = await noteFileService.get(user.id, (await context.params).id);
     return new Response(file.bytes, {
       headers: {
-        "Cache-Control": "private, max-age=31536000, immutable",
+        "Cache-Control": "private, no-store",
         "Content-Disposition": `inline; filename="${encodeURIComponent(file.originalName)}"`,
         "Content-Length": String(file.size),
         "Content-Type": file.mimeType,
@@ -19,9 +21,11 @@ export async function GET(_: Request, context: Context) {
   }
 }
 
-export async function DELETE(_: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
   try {
-    await noteFileService.remove((await context.params).id);
+    assertSameOrigin(request);
+    const user = getRequestUser(request);
+    await noteFileService.remove(user.id, (await context.params).id);
     return noContent();
   } catch (error) {
     return fail(error);

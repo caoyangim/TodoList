@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AppNav } from "@/components/app-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,12 +10,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN">
       <body>
-        <div className="app-shell">
-          <AppNav />
-          <main className="main-content">
-            <div className="content-wrap">{children}</div>
-          </main>
-        </div>
+        {children}
       </body>
     </html>
   );
