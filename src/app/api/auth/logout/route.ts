@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
     authService.logout(getRequestToken(request));
     const response = new NextResponse(null, { status: 204 });
-    clearSessionCookie(response);
+    clearSessionCookie(response, request);
     return response;
   } catch (error) {
     return fail(error);

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       "unknown";
     const result = await authService.login(await readJson(request), clientKey);
     const response = NextResponse.json({ data: result.user });
-    setSessionCookie(response, result.token);
+    setSessionCookie(response, request, result.token);
     return response;
   } catch (error) {
     return fail(error);

@@ -9,6 +9,7 @@
 - [业务规则](docs/BUSINESS_RULES.md)
 - [REST API](docs/API.md)
 - [开发规范](docs/DEVELOPMENT.md)
+- [服务器部署与更新](docs/DEPLOYMENT.md)
 - [早期开发计划](TodoFlow_开发计划书_V1.0.md)
 
 SOP 节点支持两层父子结构和必选/可选标记：

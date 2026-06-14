@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     const user = getRequestUser(request, true);
     const response = NextResponse.json({ data: user });
     const token = getRequestToken(request);
-    if (token) setSessionCookie(response, token);
+    if (token) setSessionCookie(response, request, token);
     return response;
   } catch (error) {
     return fail(error);

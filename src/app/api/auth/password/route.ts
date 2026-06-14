@@ -13,7 +13,7 @@ export async function PATCH(request: Request) {
     const user = getRequestUser(request, true);
     authService.changePassword(user.id, await readJson(request));
     const response = new NextResponse(null, { status: 204 });
-    clearSessionCookie(response);
+    clearSessionCookie(response, request);
     return response;
   } catch (error) {
     return fail(error);

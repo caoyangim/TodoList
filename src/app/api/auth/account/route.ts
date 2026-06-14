@@ -13,7 +13,7 @@ export async function DELETE(request: Request) {
     const user = getRequestUser(request);
     authService.deleteAccount(user);
     const response = new NextResponse(null, { status: 204 });
-    clearSessionCookie(response);
+    clearSessionCookie(response, request);
     return response;
   } catch (error) {
     return fail(error);

@@ -43,21 +43,26 @@ export async function getCurrentUser(): Promise<CurrentUserDto | null> {
   return authService.authenticate(store.get(sessionCookieName)?.value);
 }
 
-export function setSessionCookie(response: NextResponse, token: string) {
+function isSecureRequest(request: Request) {
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return forwardedProtocol ? forwardedProtocol === "https" : new URL(request.url).protocol === "https:";
+}
+
+export function setSessionCookie(response: NextResponse, request: Request, token: string) {
   response.cookies.set(sessionCookieName, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: authConstants.sessionDurationSeconds,
   });
 }
 
-export function clearSessionCookie(response: NextResponse) {
+export function clearSessionCookie(response: NextResponse, request: Request) {
   response.cookies.set(sessionCookieName, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: 0,
   });
