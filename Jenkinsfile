@@ -8,14 +8,13 @@ pipeline {
     stages {
         stage('Deploy') {
             steps {
-                dir('/var/www/todoflow') {
-                    sh '''
-                        export NVM_DIR="$NVM_DIR"
-                        [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-                        nvm use 24
-                        bash scripts/deploy.sh
-                    '''
-                }
+                sh '''
+                    export NVM_DIR="$NVM_DIR"
+                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                    nvm use 24
+                    cd /var/www/todoflow
+                    bash scripts/deploy.sh
+                '''
             }
         }
     }
