@@ -121,6 +121,14 @@ npm run build
 `.next` 缓存并产生虚假的缺失文件错误。遇到这种情况，删除 `.next` 后按
 `build → typecheck` 顺序重试。
 
+## 服务器发布
+
+发布或修改线上数据前必须完整阅读 [发布运行手册](docs/DEPLOYMENT.md)，并优先使用
+`scripts/deploy.sh`。不得在服务器运行 `git reset --hard`、`git clean -fdx`，不得输出
+`.env` 或保存用户提供的 SSH/管理员密码。发布成功必须同时验证目标提交、测试、构建、
+PM2 状态和 HTTP 响应。正常发布无需预读全部故障文档；出现异常后从
+[发布异常处理目录](docs/deployment-troubleshooting/README.md)选择对应方案。
+
 ## 编码规范
 
 - 保持 TypeScript strict，不使用无理由的 `any`。
