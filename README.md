@@ -88,7 +88,7 @@ REST 和 Service 边界不受影响，后续可以在数据层内替换 ORM。
 ### Todo
 
 ```text
-GET    /api/todos?status=pending|completed|all
+GET    /api/todos?status=pending|resolved|completed|all
 POST   /api/todos
 GET    /api/todos/:id
 PATCH  /api/todos/:id

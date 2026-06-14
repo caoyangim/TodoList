@@ -187,7 +187,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
                 >
                   {statusText[run.status]}
                 </span>
-                <span>版本 {run.version}</span>
+                {run.version ? <span>版本 {run.version}</span> : <span>未填写版本号</span>}
                 <span>
                   {run.completedCount}/{run.totalCount} 个执行节点
                   {run.requiredTotalCount > 0
@@ -231,7 +231,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
                 {isDeleting ? <LoadingSpinner /> : <Trash2 size={16} />}
               </button>
             </div>
-            <Link aria-label={`查看版本 ${run.version}`} href={`/runs/${run.id}`}>
+            <Link aria-label={`查看执行 ${run.title}`} href={`/runs/${run.id}`}>
               <ChevronRight size={18} color="var(--muted)" />
             </Link>
           </article>
@@ -384,11 +384,10 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
               <input
                 id="run-version"
                 className="input"
-                required
                 maxLength={50}
                 value={version}
                 onChange={(event) => setVersion(event.target.value)}
-                placeholder="例如：1.0.0"
+                placeholder="例如：1.0.0（可选）"
               />
             </div>
             <div className="form-actions">

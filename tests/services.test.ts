@@ -28,7 +28,7 @@ afterAll(() => {
 });
 
 describe("Todo service", () => {
-  it("creates, completes and reopens a Todo", async () => {
+  it("moves a Todo through pending, resolved and completed states", async () => {
     const todo = await todoService.create({
       title: "验证本地数据",
       description: "",
@@ -36,15 +36,56 @@ describe("Todo service", () => {
       importancePriority: "MEDIUM",
       dueAt: null,
     });
+    expect(todo.status).toBe("PENDING");
     expect(todo.completedAt).toBeNull();
     expect(todo.timePriority).toBe("HIGH");
     expect(todo.importancePriority).toBe("MEDIUM");
 
-    const completed = await todoService.setCompletion(todo.id, true);
-    expect(completed.completedAt).toBeTruthy();
+    const resolved = await todoService.setStatus(todo.id, { status: "RESOLVED" });
+    expect(resolved.status).toBe("RESOLVED");
+    expect(resolved.completedAt).toBeNull();
 
-    const reopened = await todoService.setCompletion(todo.id, false);
+    const completed = await todoService.setStatus(todo.id, {
+      status: "COMPLETED",
+      verificationReport: {
+        html: '<p>已验证通过 <a href="https://example.com">回归记录</a></p>',
+        fileIds: [],
+      },
+    });
+    expect(completed.status).toBe("COMPLETED");
+    expect(completed.completedAt).toBeTruthy();
+    expect(completed.verificationReport?.html).toBe(
+      '<p>已验证通过 <a href="https://example.com" target="_blank" rel="noreferrer noopener">回归记录</a></p>',
+    );
+
+    const reopened = await todoService.setStatus(todo.id, { status: "PENDING" });
+    expect(reopened.status).toBe("PENDING");
     expect(reopened.completedAt).toBeNull();
+    expect(reopened.verificationReport).toBeNull();
+  });
+
+  it("rejects skipping verification and report misuse", async () => {
+    const todo = await todoService.create({
+      title: "修复登录样式",
+      description: "",
+      timePriority: "MEDIUM",
+      importancePriority: "MEDIUM",
+      dueAt: null,
+    });
+
+    await expect(
+      todoService.setStatus(todo.id, {
+        status: "COMPLETED",
+        verificationReport: { html: "<p>直接完成</p>", fileIds: [] },
+      }),
+    ).rejects.toMatchObject({ code: "TODO_STATUS_TRANSITION_INVALID", status: 409 });
+
+    await expect(
+      todoService.setStatus(todo.id, {
+        status: "RESOLVED",
+        verificationReport: { html: "<p>不该在这里提交</p>", fileIds: [] },
+      }),
+    ).rejects.toMatchObject({ code: "TODO_VERIFICATION_REPORT_INVALID", status: 409 });
   });
 
   it("stores rich Todo notes without changing completion", async () => {
@@ -72,6 +113,7 @@ describe("Todo service", () => {
         '<p>查看 <a href="https://example.com" target="_blank" rel="noreferrer noopener">发布文档</a></p>',
       files: [file],
     });
+    expect(noted.status).toBe("PENDING");
     expect(noted.completedAt).toBeNull();
 
     const cleared = await todoService.setNote(todo.id, {
@@ -108,26 +150,54 @@ describe("SOP service", () => {
     expect(historicalRun.nodes.map((node) => node.name)).toEqual(["构建", "发布"]);
   });
 
-  it("rejects duplicate versions and updates run status", async () => {
-    const [template] = await templateService.list();
-    await expect(
-      runService.create({ templateId: template.id, title: "重复版本", version: "1.0.0" }),
-    ).rejects.toMatchObject({ code: "VERSION_EXISTS", status: 409 });
+  it("allows duplicate or empty versions and updates run status", async () => {
+    const template = await templateService.create({
+      name: "多版本执行流程",
+      description: "",
+      nodes: [
+        { name: "步骤一", description: "", sortOrder: 1 },
+        { name: "步骤二", description: "", sortOrder: 2 },
+      ],
+    });
+    const duplicateVersionRun = await runService.create({
+      templateId: template.id,
+      title: "重复版本",
+      version: "1.0.0",
+    });
+    expect(duplicateVersionRun.version).toBe("1.0.0");
 
-    const [run] = await runService.list();
-    const afterFirst = await runService.setNodeCompletion(run.id, run.nodes[0].id, true);
+    const emptyVersionRun = await runService.create({
+      templateId: template.id,
+      title: "无版本执行",
+      version: "",
+    });
+    expect(emptyVersionRun.version).toBeNull();
+
+    const afterFirst = await runService.setNodeCompletion(
+      duplicateVersionRun.id,
+      duplicateVersionRun.nodes[0].id,
+      true,
+    );
     expect(afterFirst.status).toBe("IN_PROGRESS");
     expect(afterFirst.progressPercent).toBe(50);
     const firstCompletion = afterFirst.nodes[0].firstCompletedAt;
     expect(firstCompletion).toBeTruthy();
     expect(afterFirst.nodes[0].lastModifiedAt).toBe(firstCompletion);
 
-    const afterSecond = await runService.setNodeCompletion(run.id, run.nodes[1].id, true);
+    const afterSecond = await runService.setNodeCompletion(
+      duplicateVersionRun.id,
+      duplicateVersionRun.nodes[1].id,
+      true,
+    );
     expect(afterSecond.status).toBe("COMPLETED");
     expect(afterSecond.progressPercent).toBe(100);
 
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const reopened = await runService.setNodeCompletion(run.id, run.nodes[0].id, false);
+    const reopened = await runService.setNodeCompletion(
+      duplicateVersionRun.id,
+      duplicateVersionRun.nodes[0].id,
+      false,
+    );
     expect(reopened.status).toBe("IN_PROGRESS");
     expect(reopened.completedAt).toBeNull();
     expect(reopened.nodes[0].firstCompletedAt).toBe(firstCompletion);
@@ -320,14 +390,14 @@ describe("SOP service", () => {
     const run = await runService.create({
       templateId: template.id,
       title: "Android 6 月正式版发布",
-      version: "3.0.0",
+      version: null,
     });
     expect(run.title).toBe("Android 6 月正式版发布");
 
     const renamed = await runService.setTitle(run.id, { title: "Android 6 月补丁版发布" });
     expect(renamed.title).toBe("Android 6 月补丁版发布");
     expect(renamed.templateName).toBe("上线流程");
-    expect(renamed.version).toBe("3.0.0");
+    expect(renamed.version).toBeNull();
     expect(renamed.nodes[0].name).toBe("发布");
   });
 });

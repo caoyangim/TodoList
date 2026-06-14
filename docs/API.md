@@ -45,7 +45,7 @@
 ### 查询列表
 
 ```http
-GET /api/todos?status=pending|completed|all
+GET /api/todos?status=pending|resolved|completed|all
 ```
 
 默认 `pending`。
@@ -75,7 +75,7 @@ PATCH  /api/todos/:id
 DELETE /api/todos/:id
 ```
 
-### 完成或恢复
+### 更新状态
 
 ```http
 PATCH /api/todos/:id/completion
@@ -83,7 +83,19 @@ PATCH /api/todos/:id/completion
 
 ```json
 {
-  "completed": true
+  "status": "RESOLVED"
+}
+```
+
+从“已解决”进入“已完成”时，可选携带验证报告：
+
+```json
+{
+  "status": "COMPLETED",
+  "verificationReport": {
+    "html": "<p>已完成回归验证</p>",
+    "fileIds": ["file-id"]
+  }
 }
 ```
 
@@ -97,14 +109,14 @@ PATCH /api/todos/:id/note
 {
   "note": {
     "html": "<p>查看 <a href=\"https://example.com\">发布文档</a></p>",
-    "imageIds": ["image-id"]
+    "fileIds": ["file-id"]
   }
 }
 ```
 
 - Todo 备注与 SOP 节点备注使用相同的富文本、链接白名单和图片规则。
 - 正文和图片都为空，或提交 `null`，会清空备注。
-- 更新备注不改变 Todo 完成状态。
+- 更新备注不改变 Todo 状态。
 
 ## 3. SOP 模板
 
@@ -181,12 +193,11 @@ POST /api/runs
 }
 ```
 
-`title` 必填，最长 100 个字符。
+`title` 必填，最长 100 个字符。`version` 为可选字段，允许为空，也不会因为与同模板下其他执行记录重复而拦截创建。
 
 常见冲突：
 
 - `TEMPLATE_EMPTY`：模板没有节点。
-- `VERSION_EXISTS`：同一模板版本号重复。
 
 ### 归档、恢复和删除
 

@@ -349,7 +349,8 @@ export function RunDetailPage({ runId }: { runId: string }) {
             </button>
           </div>
           <p className="page-subtitle">
-            {run.templateName} / 版本 {run.version}
+            {run.templateName}
+            {run.version ? ` / 版本 ${run.version}` : " / 未填写版本号"}
             {run.templateDescription ? ` · ${run.templateDescription}` : ""}
           </p>
         </div>

@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Edit3, File, MessageSquare, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Edit3, File, MessageSquare, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { apiRequest } from "@/shared/api-client";
-import { NoteContentDto, TodoDto, TodoPriority } from "@/shared/types/models";
+import { NoteContentDto, TodoDto, TodoPriority, TodoStatus } from "@/shared/types/models";
 import { formatFileSize } from "@/shared/format";
 import { EmptyState } from "@/components/empty-state";
 import { LoadingSpinner, LoadingState } from "@/components/loading";
 import { Modal } from "@/components/modal";
 import { RichNoteEditor } from "@/components/rich-note-editor";
 
-type Status = "pending" | "completed" | "all";
+type StatusFilter = "pending" | "resolved" | "completed" | "all";
 type TodoForm = {
   title: string;
   description: string;
@@ -19,6 +19,7 @@ type TodoForm = {
   dueAt: string;
 };
 
+const emptyRichContent: NoteContentDto = { html: "", files: [] };
 const emptyForm: TodoForm = {
   title: "",
   description: "",
@@ -27,6 +28,16 @@ const emptyForm: TodoForm = {
   dueAt: "",
 };
 const priorityText = { HIGH: "高", MEDIUM: "中", LOW: "低" };
+const todoStatusText: Record<TodoStatus, string> = {
+  PENDING: "待处理",
+  RESOLVED: "已解决（待验证）",
+  COMPLETED: "已完成（已验证）",
+};
+const todoStatusBadgeClass: Record<TodoStatus, string> = {
+  PENDING: "not-started",
+  RESOLVED: "progress",
+  COMPLETED: "completed",
+};
 
 function toDateInput(value: string | null) {
   if (!value) return "";
@@ -46,13 +57,15 @@ function formatDueDate(value: string | null) {
 }
 
 export function TodoPage() {
-  const [status, setStatus] = useState<Status>("pending");
+  const [status, setStatus] = useState<StatusFilter>("pending");
   const [todos, setTodos] = useState<TodoDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TodoDto | null | "new">(null);
   const [noteTodo, setNoteTodo] = useState<TodoDto | null>(null);
-  const [noteValue, setNoteValue] = useState<NoteContentDto>({ html: "", files: [] });
+  const [verifyTodo, setVerifyTodo] = useState<TodoDto | null>(null);
+  const [noteValue, setNoteValue] = useState<NoteContentDto>(emptyRichContent);
+  const [verificationReportValue, setVerificationReportValue] = useState<NoteContentDto>(emptyRichContent);
   const [form, setForm] = useState<TodoForm>(emptyForm);
   const [error, setError] = useState("");
 
@@ -92,7 +105,13 @@ export function TodoPage() {
 
   function openNote(todo: TodoDto) {
     setNoteTodo(todo);
-    setNoteValue(todo.note ?? { html: "", files: [] });
+    setNoteValue(todo.note ?? emptyRichContent);
+    setError("");
+  }
+
+  function openVerify(todo: TodoDto) {
+    setVerifyTodo(todo);
+    setVerificationReportValue(todo.verificationReport ?? emptyRichContent);
     setError("");
   }
 
@@ -146,19 +165,39 @@ export function TodoPage() {
     }
   }
 
-  async function toggle(todo: TodoDto) {
-    setBusyId(`toggle:${todo.id}`);
+  async function changeStatus(todo: TodoDto, nextStatus: TodoStatus, verificationReport?: NoteContentDto | null) {
+    const busyKey = `status:${todo.id}:${nextStatus}`;
+    setBusyId(busyKey);
     try {
       await apiRequest(`/api/todos/${todo.id}/completion`, {
         method: "PATCH",
-        body: JSON.stringify({ completed: !todo.completedAt }),
+        body: JSON.stringify({
+          status: nextStatus,
+          ...(verificationReport !== undefined
+            ? {
+                verificationReport: verificationReport
+                  ? {
+                      html: verificationReport.html,
+                      fileIds: verificationReport.files.map((file) => file.id),
+                    }
+                  : null,
+              }
+            : {}),
+        }),
       });
+      setVerifyTodo(null);
       await loadTodos(false);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "操作失败");
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function submitVerification(event: React.FormEvent) {
+    event.preventDefault();
+    if (!verifyTodo) return;
+    await changeStatus(verifyTodo, "COMPLETED", verificationReportValue);
   }
 
   async function remove(todo: TodoDto) {
@@ -187,14 +226,20 @@ export function TodoPage() {
       </header>
 
       <div className="tabs" style={{ marginBottom: 14 }}>
-        {(["pending", "completed", "all"] as Status[]).map((value) => (
+        {(["pending", "resolved", "completed", "all"] as StatusFilter[]).map((value) => (
           <button
             className={`tab ${status === value ? "active" : ""}`}
             disabled={loading}
             key={value}
             onClick={() => setStatus(value)}
           >
-            {value === "pending" ? "未完成" : value === "completed" ? "已完成" : "全部"}
+            {value === "pending"
+              ? "待处理"
+              : value === "resolved"
+                ? "已解决"
+                : value === "completed"
+                  ? "已完成"
+                  : "全部"}
           </button>
         ))}
       </div>
@@ -204,33 +249,68 @@ export function TodoPage() {
         <LoadingState label="正在加载 Todo..." />
       ) : todos.length === 0 ? (
         <EmptyState
-          title={status === "completed" ? "还没有已完成的 Todo" : "今天从一件小事开始"}
-          description={status === "completed" ? "完成的事项会出现在这里。" : "创建第一个 Todo，让计划开始流动。"}
-          action={status !== "completed" ? <button className="button primary" onClick={openCreate}>新建 Todo</button> : null}
+          title={
+            status === "completed"
+              ? "还没有已完成的 Todo"
+              : status === "resolved"
+                ? "还没有待验证的 Todo"
+                : "今天从一件小事开始"
+          }
+          description={
+            status === "completed"
+              ? "已验证完成的事项会出现在这里。"
+              : status === "resolved"
+                ? "已经解决、等待验证的事项会出现在这里。"
+                : "创建第一个 Todo，让计划开始流动。"
+          }
+          action={status === "completed" ? null : <button className="button primary" onClick={openCreate}>新建 Todo</button>}
         />
       ) : (
         <div className="list">
           {todos.map((todo) => {
             const due = formatDueDate(todo.dueAt);
-            const isToggling = busyId === `toggle:${todo.id}`;
+            const isAdvancing =
+              busyId === `status:${todo.id}:RESOLVED` || busyId === `status:${todo.id}:COMPLETED`;
+            const isResetting =
+              busyId === `status:${todo.id}:PENDING` || busyId === `status:${todo.id}:RESOLVED`;
             const isDeleting = busyId === `delete:${todo.id}`;
-            const isBusy = isToggling || isDeleting;
+            const isBusy = isAdvancing || isResetting || isDeleting;
             return (
               <article className="list-item" key={todo.id}>
                 <button
-                  aria-label={todo.completedAt ? "恢复 Todo" : "完成 Todo"}
-                  className={`check-button ${todo.completedAt ? "checked" : ""}`}
+                  aria-label={
+                    todo.status === "PENDING"
+                      ? "标记为已解决"
+                      : todo.status === "RESOLVED"
+                        ? "完成验证"
+                        : "重新进入待验证"
+                  }
+                  className={`check-button ${todo.status === "COMPLETED" ? "checked" : todo.status === "RESOLVED" ? "progress" : ""}`}
                   disabled={isBusy}
-                  onClick={() => void toggle(todo)}
+                  onClick={() => {
+                    if (todo.status === "PENDING") {
+                      void changeStatus(todo, "RESOLVED");
+                      return;
+                    }
+                    if (todo.status === "RESOLVED") {
+                      openVerify(todo);
+                      return;
+                    }
+                    void changeStatus(todo, "RESOLVED");
+                  }}
                 >
-                  {isToggling ? (
+                  {isAdvancing ? (
                     <LoadingSpinner size={13} />
-                  ) : todo.completedAt ? (
+                  ) : todo.status === "COMPLETED" ? (
+                    <ShieldCheck size={13} />
+                  ) : todo.status === "RESOLVED" ? (
+                    <ChevronRight size={13} />
+                  ) : (
                     <Check size={13} />
-                  ) : null}
+                  )}
                 </button>
                 <div className="list-item-main">
-                  <h2 className={`item-title ${todo.completedAt ? "completed-text" : ""}`}>{todo.title}</h2>
+                  <h2 className={`item-title ${todo.status === "COMPLETED" ? "completed-text" : ""}`}>{todo.title}</h2>
                   {todo.description ? <p className="item-description">{todo.description}</p> : null}
                   {todo.note ? (
                     <div className="node-note todo-note">
@@ -276,17 +356,69 @@ export function TodoPage() {
                       </div>
                     </div>
                   ) : null}
+                  {todo.verificationReport ? (
+                    <div className="node-note todo-note">
+                      <ShieldCheck size={14} />
+                      <div className="node-note-content">
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>验证报告</div>
+                        {todo.verificationReport.html ? (
+                          <div
+                            className="rich-note-content"
+                            dangerouslySetInnerHTML={{ __html: todo.verificationReport.html }}
+                          />
+                        ) : null}
+                        {todo.verificationReport.files.length > 0 ? (
+                          <div className="note-file-grid display">
+                            {todo.verificationReport.files.map((file) =>
+                              file.mimeType.startsWith("image/") ? (
+                                <a href={file.url} key={file.id} rel="noreferrer" target="_blank">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img alt="Todo 验证报告附件" src={file.url} />
+                                </a>
+                              ) : (
+                                <a
+                                  href={file.url}
+                                  key={file.id}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                  className="note-file-card display"
+                                >
+                                  <File size={20} />
+                                  <span className="note-file-card-name" title={file.originalName}>
+                                    {file.originalName}
+                                  </span>
+                                  <span className="note-file-card-size">{formatFileSize(file.size)}</span>
+                                </a>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="item-meta">
+                    <span className={`badge ${todoStatusBadgeClass[todo.status]}`}>{todoStatusText[todo.status]}</span>
                     <span className={`badge ${todo.timePriority.toLowerCase()}`}>
                       时间优先级：{priorityText[todo.timePriority]}
                     </span>
                     <span className={`badge ${todo.importancePriority.toLowerCase()}`}>
                       重要优先级：{priorityText[todo.importancePriority]}
                     </span>
-                    {due ? <span style={{ color: due.overdue && !todo.completedAt ? "var(--danger)" : undefined }}>{due.overdue && !todo.completedAt ? "已逾期 · " : ""}{due.label}</span> : null}
+                    {due ? <span style={{ color: due.overdue && todo.status !== "COMPLETED" ? "var(--danger)" : undefined }}>{due.overdue && todo.status !== "COMPLETED" ? "已逾期 · " : ""}{due.label}</span> : null}
                   </div>
                 </div>
                 <div className="item-actions">
+                  {todo.status !== "PENDING" ? (
+                    <button
+                      aria-label="退回待处理"
+                      className="button ghost icon-only"
+                      disabled={isBusy}
+                      onClick={() => void changeStatus(todo, "PENDING")}
+                      title="退回待处理"
+                    >
+                      {isResetting && busyId === `status:${todo.id}:PENDING` ? <LoadingSpinner /> : <RotateCcw size={16} />}
+                    </button>
+                  ) : null}
                   <button
                     aria-label={todo.note ? "编辑备注" : "添加备注"}
                     className="button ghost icon-only"
@@ -352,6 +484,56 @@ export function TodoPage() {
               <button className="button" disabled={busyId === "form"} type="button" onClick={() => setEditing(null)}>取消</button>
               <button className="button primary" disabled={busyId === "form"} type="submit">
                 {busyId === "form" ? <><LoadingSpinner /> 保存中...</> : "保存"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {verifyTodo ? (
+        <Modal
+          title="完成验证"
+          onClose={() => {
+            if (busyId !== `status:${verifyTodo.id}:COMPLETED`) setVerifyTodo(null);
+          }}
+        >
+          <form className="form-stack" onSubmit={submitVerification}>
+            {error ? <div className="error-banner">{error}</div> : null}
+            <div className="field">
+              <label>{verifyTodo.title}</label>
+              <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
+                可以补充可选的验证报告，也可以直接完成验证。
+              </p>
+            </div>
+            <div className="field">
+              <label>验证报告（可选）</label>
+              <RichNoteEditor
+                value={verificationReportValue}
+                onChange={setVerificationReportValue}
+                onError={setError}
+              />
+            </div>
+            <div className="form-actions">
+              <button
+                className="button"
+                disabled={busyId === `status:${verifyTodo.id}:COMPLETED`}
+                onClick={() => setVerifyTodo(null)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className="button primary"
+                disabled={busyId === `status:${verifyTodo.id}:COMPLETED`}
+                type="submit"
+              >
+                {busyId === `status:${verifyTodo.id}:COMPLETED` ? (
+                  <>
+                    <LoadingSpinner /> 提交中...
+                  </>
+                ) : (
+                  "确认完成"
+                )}
               </button>
             </div>
           </form>

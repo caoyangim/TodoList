@@ -82,7 +82,7 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 | `Todo` | Todo 基础信息、完成状态与富备注 |
 | `SopTemplate` | SOP 模板 |
 | `SopTemplateNode` | 模板节点及父子关系 |
-| `SopRun` | 独立标题、版本化执行实例和模板快照 |
+| `SopRun` | 独立标题、可选版本号的执行实例和模板快照 |
 | `SopRunNode` | 执行节点快照、状态、备注和时间 |
 | `NoteImage` | 富备注图片元数据 |
 
@@ -109,7 +109,7 @@ TodoPage
 
 ```text
 POST /api/runs
-→ 校验模板和版本
+→ 校验模板并规范化可选版本号
 → 同一事务创建 SopRun
 → 复制全部模板节点并重映射 parentId
 → 返回独立快照

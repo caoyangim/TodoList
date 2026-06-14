@@ -19,7 +19,9 @@ db.exec(`
     title TEXT NOT NULL,
     description TEXT,
     note TEXT,
+    verificationReport TEXT,
     priority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(priority IN ('LOW', 'MEDIUM', 'HIGH')),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'RESOLVED', 'COMPLETED')),
     timePriority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(timePriority IN ('LOW', 'MEDIUM', 'HIGH')),
     importancePriority TEXT NOT NULL DEFAULT 'MEDIUM' CHECK(importancePriority IN ('LOW', 'MEDIUM', 'HIGH')),
     dueAt TEXT,
@@ -56,14 +58,13 @@ db.exec(`
     templateNameSnapshot TEXT NOT NULL,
     templateDescriptionSnapshot TEXT,
     title TEXT NOT NULL,
-    version TEXT NOT NULL,
+    version TEXT,
     startedAt TEXT,
     completedAt TEXT,
     archivedAt TEXT,
     createdAt TEXT NOT NULL,
     updatedAt TEXT NOT NULL,
-    FOREIGN KEY(templateId) REFERENCES SopTemplate(id) ON DELETE RESTRICT,
-    UNIQUE(templateId, version)
+    FOREIGN KEY(templateId) REFERENCES SopTemplate(id) ON DELETE RESTRICT
   );
   CREATE INDEX IF NOT EXISTS SopRun_completedAt_idx ON SopRun(completedAt);
 
@@ -122,6 +123,12 @@ ensureColumn("SopRunNode", "firstCompletedAt", "TEXT");
 ensureColumn("SopRunNode", "lastModifiedAt", "TEXT");
 ensureColumn("SopRunNode", "note", "TEXT");
 ensureColumn("Todo", "note", "TEXT");
+ensureColumn("Todo", "verificationReport", "TEXT");
+ensureColumn(
+  "Todo",
+  "status",
+  "TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'RESOLVED', 'COMPLETED'))",
+);
 ensureColumn(
   "Todo",
   "timePriority",
@@ -139,6 +146,59 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);
 `);
 
+function migrateSopRunVersionConstraint() {
+  const createSql = (
+    db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'SopRun'",
+    ).get() as { sql: string } | undefined
+  )?.sql;
+  if (!createSql) return;
+  const needsRebuild =
+    createSql.includes("UNIQUE(templateId, version)") || createSql.includes("version TEXT NOT NULL");
+  if (!needsRebuild) return;
+
+  db.pragma("foreign_keys = OFF");
+  try {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE SopRun_new (
+          id TEXT PRIMARY KEY,
+          templateId TEXT NOT NULL,
+          templateNameSnapshot TEXT NOT NULL,
+          templateDescriptionSnapshot TEXT,
+          title TEXT NOT NULL,
+          version TEXT,
+          startedAt TEXT,
+          completedAt TEXT,
+          archivedAt TEXT,
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          FOREIGN KEY(templateId) REFERENCES SopTemplate(id) ON DELETE RESTRICT
+        );
+
+        INSERT INTO SopRun_new (
+          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          title, version, startedAt, completedAt, archivedAt, createdAt, updatedAt
+        )
+        SELECT
+          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          title, NULLIF(TRIM(version), ''), startedAt, completedAt, archivedAt, createdAt, updatedAt
+        FROM SopRun;
+
+        DROP TABLE SopRun;
+        ALTER TABLE SopRun_new RENAME TO SopRun;
+
+        CREATE INDEX IF NOT EXISTS SopRun_completedAt_idx ON SopRun(completedAt);
+        CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);
+      `);
+    })();
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+
+migrateSopRunVersionConstraint();
+
 db.exec(`
   UPDATE Todo
   SET timePriority = priority
@@ -150,8 +210,22 @@ db.exec(`
   WHERE priority IS NOT NULL
     AND (importancePriority IS NULL OR (importancePriority = 'MEDIUM' AND priority != 'MEDIUM'));
 
+  UPDATE Todo
+  SET status = CASE
+    WHEN completedAt IS NOT NULL THEN 'COMPLETED'
+    ELSE 'PENDING'
+  END
+  WHERE status IS NULL OR TRIM(status) = '';
+
+  UPDATE Todo
+  SET status = 'COMPLETED'
+  WHERE completedAt IS NOT NULL AND status = 'PENDING';
+
   UPDATE SopRun
-  SET title = templateNameSnapshot || ' / ' || version
+  SET title = CASE
+    WHEN version IS NULL OR TRIM(version) = '' THEN templateNameSnapshot
+    ELSE templateNameSnapshot || ' / ' || version
+  END
   WHERE title IS NULL OR TRIM(title) = '';
 
   UPDATE SopRunNode

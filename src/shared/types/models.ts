@@ -1,10 +1,13 @@
 export type TodoPriority = "LOW" | "MEDIUM" | "HIGH";
+export type TodoStatus = "PENDING" | "RESOLVED" | "COMPLETED";
 
 export type TodoDto = {
   id: string;
   title: string;
   description: string | null;
   note: NoteContentDto | null;
+  verificationReport: NoteContentDto | null;
+  status: TodoStatus;
   timePriority: TodoPriority;
   importancePriority: TodoPriority;
   dueAt: string | null;
@@ -71,7 +74,7 @@ export type RunDto = {
   templateName: string;
   templateDescription: string | null;
   title: string;
-  version: string;
+  version: string | null;
   status: RunStatus;
   startedAt: string | null;
   completedAt: string | null;

@@ -22,7 +22,7 @@ type RunRow = {
   templateNameSnapshot: string;
   templateDescriptionSnapshot: string | null;
   title: string;
-  version: string;
+  version: string | null;
   startedAt: string | null;
   completedAt: string | null;
   archivedAt: string | null;
@@ -192,41 +192,34 @@ export const runService = {
     const id = randomUUID();
     const now = new Date().toISOString();
     const nodeIdMap = new Map(templateNodes.map((node) => [node.id, randomUUID()]));
-    try {
-      db.transaction(() => {
-        db.prepare(`
-          INSERT INTO SopRun (
-            id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
-            title, version, startedAt, completedAt, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
-        `).run(id, template.id, template.name, template.description, data.title, data.version, now, now);
-        const insert = db.prepare(`
-          INSERT INTO SopRunNode (
-            id, runId, nameSnapshot, descriptionSnapshot, note, sortOrder,
-            isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt,
-            createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?)
-        `);
-        templateNodes.forEach((node) =>
-          insert.run(
-            nodeIdMap.get(node.id),
-            id,
-            node.name,
-            node.description,
-            node.sortOrder,
-            node.isRequired,
-            node.parentId ? nodeIdMap.get(node.parentId) ?? null : null,
-            now,
-            now,
-          ),
-        );
-      })();
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-        throw new AppError("VERSION_EXISTS", "该模板下已存在相同版本号", 409);
-      }
-      throw error;
-    }
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO SopRun (
+          id, templateId, templateNameSnapshot, templateDescriptionSnapshot,
+          title, version, startedAt, completedAt, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      `).run(id, template.id, template.name, template.description, data.title, data.version, now, now);
+      const insert = db.prepare(`
+        INSERT INTO SopRunNode (
+          id, runId, nameSnapshot, descriptionSnapshot, note, sortOrder,
+          isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt,
+          createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+      `);
+      templateNodes.forEach((node) =>
+        insert.run(
+          nodeIdMap.get(node.id),
+          id,
+          node.name,
+          node.description,
+          node.sortOrder,
+          node.isRequired,
+          node.parentId ? nodeIdMap.get(node.parentId) ?? null : null,
+          now,
+          now,
+        ),
+      );
+    })();
     return this.get(id);
   },
 

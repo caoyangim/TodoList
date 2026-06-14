@@ -8,21 +8,23 @@ import {
 import { noteFileService } from "@/server/services/note-file-service";
 import {
   todoInputSchema,
+  todoListStatusSchema,
   todoNoteSchema,
   todoPatchSchema,
-  todoStatusSchema,
+  todoTransitionSchema,
 } from "@/shared/schemas/todo";
 import { NoteContentDto, TodoDto } from "@/shared/types/models";
 
-type TodoRow = Omit<TodoDto, "note"> & {
+type TodoRow = Omit<TodoDto, "note" | "verificationReport"> & {
   note: string | null;
+  verificationReport: string | null;
 };
 
 function getTodoRow(id: string) {
   return db.prepare("SELECT * FROM Todo WHERE id = ?").get(id) as TodoRow | undefined;
 }
 
-function parseNote(value: string | null): NoteContentDto | null {
+function parseRichContent(value: string | null): NoteContentDto | null {
   if (!value) return null;
   let parsed: { html?: string; text?: string; fileIds?: string[]; imageIds?: string[] };
   try {
@@ -45,21 +47,51 @@ function parseNote(value: string | null): NoteContentDto | null {
 }
 
 function toTodoDto(row: TodoRow): TodoDto {
-  return { ...row, note: parseNote(row.note) };
+  return {
+    ...row,
+    note: parseRichContent(row.note),
+    verificationReport: parseRichContent(row.verificationReport),
+  };
+}
+
+function serializeRichContent(input: { html: string; fileIds: string[] } | null) {
+  if (!input) return null;
+  const content = sanitizeNoteHtml(input.html);
+  if (content.textLength > 2000) {
+    throw new AppError("NOTE_TOO_LONG", "备注文字不能超过 2000 个字符", 400);
+  }
+  return !content.isEmpty || input.fileIds.length > 0
+    ? JSON.stringify({
+        html: content.html,
+        fileIds: noteFileService.getMany(input.fileIds).map((file) => file.id),
+      })
+    : null;
 }
 
 export const todoService = {
   async list(status: unknown) {
-    const parsedStatus = todoStatusSchema.parse(status ?? "pending");
+    const parsedStatus = todoListStatusSchema.parse(status ?? "pending");
     const where =
-      parsedStatus === "completed"
-        ? "WHERE completedAt IS NOT NULL"
-        : parsedStatus === "pending"
-          ? "WHERE completedAt IS NULL"
-          : "";
+      parsedStatus === "resolved"
+        ? "WHERE status = 'RESOLVED'"
+        : parsedStatus === "completed"
+          ? "WHERE status = 'COMPLETED'"
+          : parsedStatus === "pending"
+            ? "WHERE status = 'PENDING'"
+            : "";
+    const orderBy = `
+      ORDER BY
+        CASE status
+          WHEN 'PENDING' THEN 0
+          WHEN 'RESOLVED' THEN 1
+          ELSE 2
+        END ASC,
+        completedAt DESC,
+        createdAt DESC
+    `;
     return (
       db
-      .prepare(`SELECT * FROM Todo ${where} ORDER BY completedAt ASC, createdAt DESC`)
+      .prepare(`SELECT * FROM Todo ${where} ${orderBy}`)
         .all() as TodoRow[]
     ).map(toTodoDto);
   },
@@ -78,6 +110,8 @@ export const todoService = {
       title: data.title,
       description: data.description,
       note: null,
+      verificationReport: null,
+      status: "PENDING",
       timePriority: data.timePriority,
       importancePriority: data.importancePriority,
       dueAt: data.dueAt?.toISOString() ?? null,
@@ -87,10 +121,10 @@ export const todoService = {
     };
     db.prepare(`
       INSERT INTO Todo (
-        id, title, description, note, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
+        id, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, createdAt, updatedAt
       )
       VALUES (
-        @id, @title, @description, @note, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
+        @id, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, @createdAt, @updatedAt
       )
     `).run(todo);
     return todo;
@@ -122,32 +156,46 @@ export const todoService = {
   async setNote(id: string, input: unknown) {
     await this.get(id);
     const data = todoNoteSchema.parse(input);
-    const content = data.note ? sanitizeNoteHtml(data.note.html) : null;
-    if (content && content.textLength > 2000) {
-      throw new AppError("NOTE_TOO_LONG", "备注文字不能超过 2000 个字符", 400);
-    }
-    const note =
-      data.note && content && (!content.isEmpty || data.note.fileIds.length > 0)
-        ? JSON.stringify({
-            html: content.html,
-            fileIds: noteFileService.getMany(data.note.fileIds).map((f) => f.id),
-          })
-        : null;
+    const note = serializeRichContent(data.note);
     const updatedAt = new Date().toISOString();
     db.prepare("UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ?").run(note, updatedAt, id);
     return this.get(id);
   },
 
-  async setCompletion(id: string, completed: boolean) {
+  async setStatus(id: string, input: unknown) {
     const current = await this.get(id);
-    if (Boolean(current.completedAt) === completed) return current;
-    const completedAt = completed ? new Date().toISOString() : null;
+    const data = todoTransitionSchema.parse(input);
+    if (current.status === data.status) return current;
+    if (current.status === "PENDING" && data.status !== "RESOLVED") {
+      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "待处理 Todo 只能标记为已解决", 409);
+    }
+    if (current.status === "RESOLVED" && !["PENDING", "COMPLETED"].includes(data.status)) {
+      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "已解决 Todo 只能退回待处理或标记为已完成", 409);
+    }
+    if (current.status === "COMPLETED" && !["PENDING", "RESOLVED"].includes(data.status)) {
+      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "已完成 Todo 只能退回待处理或已解决", 409);
+    }
+    if (data.status !== "COMPLETED" && data.verificationReport !== undefined) {
+      throw new AppError("TODO_VERIFICATION_REPORT_INVALID", "只有标记为已完成时才能提交验证报告", 409);
+    }
+
+    const verificationReport =
+      data.status === "COMPLETED" ? serializeRichContent(data.verificationReport ?? null) : null;
+    const completedAt = data.status === "COMPLETED" ? new Date().toISOString() : null;
     const updatedAt = new Date().toISOString();
-    db.prepare("UPDATE Todo SET completedAt = ?, updatedAt = ? WHERE id = ?").run(
+    db.prepare("UPDATE Todo SET status = ?, verificationReport = ?, completedAt = ?, updatedAt = ? WHERE id = ?").run(
+      data.status,
+      verificationReport,
       completedAt,
       updatedAt,
       id,
     );
-    return { ...current, completedAt, updatedAt };
+    return {
+      ...current,
+      status: data.status,
+      verificationReport: data.status === "COMPLETED" ? parseRichContent(verificationReport) : null,
+      completedAt,
+      updatedAt,
+    };
   },
 };

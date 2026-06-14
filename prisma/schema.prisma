@@ -13,17 +13,25 @@ enum TodoPriority {
   HIGH
 }
 
+enum TodoStatus {
+  PENDING
+  RESOLVED
+  COMPLETED
+}
+
 model Todo {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  note        String?
-  timePriority TodoPriority @default(MEDIUM)
+  id                 String       @id @default(cuid())
+  title              String
+  description        String?
+  note               String?
+  verificationReport String?
+  status             TodoStatus   @default(PENDING)
+  timePriority       TodoPriority @default(MEDIUM)
   importancePriority TodoPriority @default(MEDIUM)
-  dueAt       DateTime?
-  completedAt DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  dueAt              DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   @@index([completedAt])
   @@index([dueAt])
@@ -63,7 +71,7 @@ model SopRun {
   templateNameSnapshot        String
   templateDescriptionSnapshot String?
   title                       String
-  version                     String
+  version                     String?
   startedAt                   DateTime?
   completedAt                 DateTime?
   archivedAt                  DateTime?
@@ -71,7 +79,6 @@ model SopRun {
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
 
-  @@unique([templateId, version])
   @@index([completedAt])
   @@index([archivedAt])
 }

@@ -3,7 +3,13 @@ import { z } from "zod";
 export const runInputSchema = z.object({
   templateId: z.string().min(1, "请选择模板"),
   title: z.string().trim().min(1, "请输入执行标题").max(100),
-  version: z.string().trim().min(1, "请输入版本号").max(50),
+  version: z
+    .string()
+    .trim()
+    .max(50, "版本号不能超过 50 个字符")
+    .optional()
+    .nullable()
+    .transform((value) => value || null),
 });
 
 export const runArchiveSchema = z.object({
