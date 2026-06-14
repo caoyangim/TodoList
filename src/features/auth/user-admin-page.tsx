@@ -86,14 +86,34 @@ export function UserAdminPage({ currentUserId }: { currentUserId: string }) {
       <form className="card form-stack account-create-form" onSubmit={createUser}>
         <h2 className="section-title">创建账号</h2>
         {error && <div className="error-banner">{error}</div>}
-        <div className="form-row">
+        <div className="form-row account-create-fields">
           <div className="field">
             <label htmlFor="newUsername">用户名</label>
-            <input className="input" id="newUsername" value={username} onChange={(event) => setUsername(event.target.value)} />
+            <input
+              autoComplete="off"
+              className="input"
+              id="newUsername"
+              maxLength={32}
+              minLength={3}
+              required
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
+            <span className="field-hint">使用 3–32 位小写字母、数字或 . _ -</span>
           </div>
           <div className="field">
             <label htmlFor="temporaryPassword">临时密码</label>
-            <input className="input" id="temporaryPassword" type="password" minLength={6} maxLength={32} required value={password} onChange={(event) => setPassword(event.target.value)} />
+            <input
+              autoComplete="new-password"
+              className="input"
+              id="temporaryPassword"
+              type="password"
+              minLength={6}
+              maxLength={32}
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
             <span className="field-hint">密码长度为 6–32 个字符</span>
           </div>
         </div>

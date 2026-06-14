@@ -958,6 +958,14 @@ a {
   margin-bottom: 20px;
 }
 
+.account-create-fields {
+  align-items: start;
+}
+
+.account-create-fields .field {
+  grid-template-rows: auto 42px auto;
+}
+
 .account-list {
   display: grid;
   gap: 10px;
