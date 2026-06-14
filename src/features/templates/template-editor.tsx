@@ -16,9 +16,16 @@ type NodeForm = {
   parentId: string | null;
 };
 
+function createClientId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `node-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function newNode(parentId: string | null = null): NodeForm {
   return {
-    id: crypto.randomUUID(),
+    id: createClientId(),
     name: "",
     description: "",
     isRequired: true,
