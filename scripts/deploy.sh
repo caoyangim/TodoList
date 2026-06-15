@@ -62,7 +62,18 @@ pm2 restart "$PM2_APP" --update-env
 APP_STOPPED=0
 trap - EXIT
 
-curl --fail --silent --show-error --max-time 15 "$HEALTH_URL" >/dev/null
+for i in $(seq 1 10); do
+  if curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
+    break
+  fi
+  echo "Waiting for app to be ready... ($i/10)"
+  sleep 3
+done
+
+if ! curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
+  echo "Health check failed after 10 retries." >&2
+  exit 1
+fi
 
 echo "TodoFlow deployment completed."
 pm2 status "$PM2_APP"
