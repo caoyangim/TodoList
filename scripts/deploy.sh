@@ -14,7 +14,7 @@ restore_service() {
   local exit_code=$?
   if [[ $exit_code -ne 0 ]]; then
     if [[ -n "$PREVIOUS_BUILD" && -d "$PREVIOUS_BUILD" ]]; then
-      echo "Deployment failed; restoring the previous build." >&2
+      echo "部署失败，正在恢复上一版本构建..." >&2
       rm -rf .next
       mv "$PREVIOUS_BUILD" .next
     fi
@@ -25,27 +25,37 @@ restore_service() {
   exit "$exit_code"
 }
 
-echo "Deploying TodoFlow from origin/${BRANCH}..."
+echo "▸ 正在从 origin/${BRANCH} 部署 TodoFlow..."
+echo "▸ 检查工作区状态..."
 if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Refusing to deploy with a dirty server worktree." >&2
+  echo "服务器工作区有未提交更改，拒绝部署。" >&2
   exit 1
 fi
 
+echo "▸ 拉取最新代码..."
 git pull --ff-only origin "$BRANCH"
+echo "▸ 安装依赖..."
 npm ci
+echo "▸ 代码检查..."
 npm run lint
+echo "▸ 类型检查..."
 npm run typecheck
+echo "▸ 运行测试..."
 npm test
 
+echo "▸ 创建备份目录..."
 mkdir -p backups
+echo "▸ 停止应用..."
 pm2 stop "$PM2_APP"
 APP_STOPPED=1
 trap restore_service EXIT
 
 archive="backups/todoflow-data-$(date +%Y%m%d-%H%M%S).tar.gz"
+echo "▸ 备份数据库..."
 tar -czf "$archive" data
-echo "Database backup created: $archive"
+echo "数据库备份已创建：$archive"
 
+echo "▸ 构建新版本..."
 if [[ -d .next ]]; then
   PREVIOUS_BUILD=".next.previous-$(date +%s)"
   mv .next "$PREVIOUS_BUILD"
@@ -58,22 +68,24 @@ if [[ -n "$PREVIOUS_BUILD" && -d "$PREVIOUS_BUILD" ]]; then
   PREVIOUS_BUILD=""
 fi
 
+echo "▸ 启动应用..."
 pm2 restart "$PM2_APP" --update-env
 APP_STOPPED=0
 trap - EXIT
 
+echo "▸ 健康检查..."
 for i in $(seq 1 10); do
   if curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
     break
   fi
-  echo "Waiting for app to be ready... ($i/10)"
+  echo "等待应用就绪...（$i/10）"
   sleep 3
 done
 
 if ! curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
-  echo "Health check failed after 10 retries." >&2
+  echo "健康检查失败（已重试 10 次）" >&2
   exit 1
 fi
 
-echo "TodoFlow deployment completed."
+echo "TodoFlow 部署完成。"
 pm2 status "$PM2_APP"
