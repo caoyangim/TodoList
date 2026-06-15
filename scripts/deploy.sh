@@ -73,6 +73,8 @@ pm2 restart "$PM2_APP" --update-env
 APP_STOPPED=0
 trap - EXIT
 
+sleep 5
+
 echo "▸ 健康检查..."
 for i in $(seq 1 10); do
   if curl --fail --silent --show-error --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
