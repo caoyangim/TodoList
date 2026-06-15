@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BuildInfo } from "@/components/build-info";
 import { Modal } from "@/components/modal";
 import { PasswordForm } from "@/features/auth/password-form";
 import { apiRequest, getApiErrorMessage } from "@/shared/api-client";
@@ -90,6 +91,8 @@ export function AccountPage({ user }: { user: CurrentUserDto }) {
           </div>
         </Modal>
       )}
+
+      <BuildInfo />
     </>
   );
 }
