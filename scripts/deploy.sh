@@ -56,6 +56,7 @@ tar -czf "$archive" data
 echo "数据库备份已创建：$archive"
 
 echo "▸ 构建新版本..."
+mkdir -p public
 cat > public/build-info.json << JSONEOF
 {
   "commit": "$(git rev-parse --short HEAD)",
