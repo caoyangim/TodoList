@@ -56,8 +56,12 @@ tar -czf "$archive" data
 echo "数据库备份已创建：$archive"
 
 echo "▸ 构建新版本..."
-export NEXT_PUBLIC_GIT_COMMIT="$(git rev-parse --short HEAD)"
-export NEXT_PUBLIC_BUILD_TIME="$(date -u +"%Y-%m-%d %H:%M UTC")"
+cat > public/build-info.json << JSONEOF
+{
+  "commit": "$(git rev-parse --short HEAD)",
+  "time": "$(date -u +"%Y-%m-%d %H:%M UTC")"
+}
+JSONEOF
 if [[ -d .next ]]; then
   PREVIOUS_BUILD=".next.previous-$(date +%s)"
   mv .next "$PREVIOUS_BUILD"

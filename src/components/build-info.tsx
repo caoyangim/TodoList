@@ -1,14 +1,43 @@
 "use client";
 
-const commit = process.env.NEXT_PUBLIC_GIT_COMMIT ?? "dev";
-const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME ?? "";
+import { useEffect, useState } from "react";
+
+type BuildMeta = {
+  commit?: string;
+  time?: string;
+};
+
+function Fallback() {
+  return (
+    <div className="build-info">
+      <span className="build-commit">dev</span>
+    </div>
+  );
+}
 
 export function BuildInfo() {
-  if (!commit && !buildTime) return null;
+  const [meta, setMeta] = useState<BuildMeta | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    fetch("/build-info.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("not found");
+        return res.json();
+      })
+      .then((data: BuildMeta) => setMeta(data))
+      .catch(() => setError(true));
+  }, []);
+
+  if (error) return <Fallback />;
+  if (!meta) return null;
+
+  const { commit, time } = meta;
+  if (!commit && !time) return null;
 
   return (
     <div className="build-info">
-      {commit !== "dev" ? (
+      {commit ? (
         <a
           className="build-commit"
           href={`https://github.com/caoyangim/TodoList/commit/${commit}`}
@@ -17,12 +46,10 @@ export function BuildInfo() {
         >
           {commit.slice(0, 7)}
         </a>
-      ) : (
-        <span className="build-commit">{commit}</span>
-      )}
-      {buildTime && (
-        <time className="build-time" dateTime={buildTime}>
-          {buildTime}
+      ) : null}
+      {time && (
+        <time className="build-time" dateTime={time}>
+          {time}
         </time>
       )}
     </div>

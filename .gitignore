@@ -17,6 +17,9 @@ coverage/
 .env.*
 !.env.example
 
+# Build metadata (generated during deployment)
+public/build-info.json
+
 # Local SQLite data
 data/
 data-test/
