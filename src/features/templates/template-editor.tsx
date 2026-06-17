@@ -35,6 +35,7 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
             name: node.name,
             description: node.description ?? "",
             isRequired: node.isRequired,
+            noteRequired: node.noteRequired,
             parentId: node.parentId,
           })),
         );

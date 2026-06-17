@@ -31,9 +31,10 @@ type RunRow = {
   updatedAt: string;
 };
 
-type RunNodeRow = Omit<RunNodeDto, "isRequired" | "isParent" | "note"> & {
+type RunNodeRow = Omit<RunNodeDto, "isRequired" | "noteRequired" | "isParent" | "note"> & {
   note: string | null;
   isRequired: number;
+  noteRequired: number;
 };
 
 function parseNote(userId: string, value: string | null): NoteContentDto | null {
@@ -66,7 +67,7 @@ function getRun(userId: string, id: string): RunDto | null {
 
   const rows = db.prepare(`
     SELECT id, nameSnapshot AS name, descriptionSnapshot AS description,
-           note, sortOrder, isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt
+           note, sortOrder, isRequired, noteRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt
     FROM SopRunNode WHERE runId = ? ORDER BY sortOrder
   `).all(id) as RunNodeRow[];
   const parentIds = new Set(rows.map((node) => node.parentId).filter(Boolean));
@@ -74,6 +75,7 @@ function getRun(userId: string, id: string): RunDto | null {
     ...node,
     note: parseNote(userId, node.note),
     isRequired: Boolean(node.isRequired),
+    noteRequired: Boolean(node.noteRequired),
     isParent: parentIds.has(node.id),
   }));
   const leaves = nodes.filter((node) => !node.isParent);
@@ -190,6 +192,7 @@ export const runService = {
       description: string | null;
       sortOrder: number;
       isRequired: number;
+      noteRequired: number;
       parentId: string | null;
     };
 
@@ -212,8 +215,8 @@ export const runService = {
         );
         const insertTemplateNode = db.prepare(`
           INSERT INTO SopTemplateNode (
-            id, templateId, name, description, sortOrder, isRequired, parentId, createdAt, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, templateId, name, description, sortOrder, isRequired, noteRequired, parentId, createdAt, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         template.nodes.forEach((node, index) => {
           insertTemplateNode.run(
@@ -223,6 +226,7 @@ export const runService = {
             node.description,
             index + 1,
             node.isRequired ? 1 : 0,
+            node.noteRequired ? 1 : 0,
             node.parentId ? clientIdMap.get(node.parentId) ?? null : null,
             now,
             now,
@@ -239,7 +243,7 @@ export const runService = {
         | undefined;
       if (!template) throw new AppError("TEMPLATE_NOT_FOUND", "SOP 模板不存在", 404);
       const templateNodes = db.prepare(`
-        SELECT id, name, description, sortOrder, isRequired, parentId
+        SELECT id, name, description, sortOrder, isRequired, noteRequired, parentId
         FROM SopTemplateNode WHERE templateId = ? ORDER BY sortOrder
       `).all(template.id) as TemplateNode[];
       if (!templateNodes.length) {
@@ -256,9 +260,9 @@ export const runService = {
       const insert = db.prepare(`
         INSERT INTO SopRunNode (
           id, runId, nameSnapshot, descriptionSnapshot, note, sortOrder,
-          isRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt,
+          isRequired, noteRequired, parentId, completedAt, firstCompletedAt, lastModifiedAt,
           createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, NULL, ?, ?)
+        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
       `);
       templateNodes.forEach((node) =>
         insert.run(
@@ -268,6 +272,7 @@ export const runService = {
           node.description,
           node.sortOrder,
           node.isRequired,
+          node.noteRequired,
           node.parentId ? nodeIdMap.get(node.parentId) ?? null : null,
           now,
           now,
@@ -292,6 +297,12 @@ export const runService = {
     if (!node) throw new AppError("RUN_NODE_NOT_FOUND", "执行节点不存在", 404);
     if (node.isParent) {
       throw new AppError("PARENT_NODE_READ_ONLY", "父节点由子节点自动完成，不能手动操作", 409);
+    }
+    if (completed && node.noteRequired) {
+      const hasContent = node.note && (node.note.html.trim().length > 0 || node.note.files.length > 0);
+      if (!hasContent) {
+        throw new AppError("NOTE_REQUIRED", "该节点要求必填备注才能完成，请先添加备注", 409);
+      }
     }
     const now = new Date().toISOString();
 

@@ -178,6 +178,8 @@ ensureColumn(
 );
 ensureColumn("SopRun", "archivedAt", "TEXT");
 ensureColumn("SopRun", "title", "TEXT");
+ensureColumn("SopTemplateNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("SopRunNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);

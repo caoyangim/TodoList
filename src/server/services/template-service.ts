@@ -21,13 +21,13 @@ function getTemplate(userId: string, id: string): TemplateDto | null {
   `).get(id, userId) as TemplateRow | undefined;
   if (!template) return null;
   const nodes = db
-    .prepare("SELECT id, name, description, sortOrder, isRequired, parentId FROM SopTemplateNode WHERE templateId = ? ORDER BY sortOrder")
-    .all(id) as (Omit<TemplateNodeDto, "isRequired"> & { isRequired: number })[];
+    .prepare("SELECT id, name, description, sortOrder, isRequired, noteRequired, parentId FROM SopTemplateNode WHERE templateId = ? ORDER BY sortOrder")
+    .all(id) as (Omit<TemplateNodeDto, "isRequired" | "noteRequired"> & { isRequired: number; noteRequired: number })[];
   return {
     id: template.id,
     name: template.name,
     description: template.description,
-    nodes: nodes.map((node) => ({ ...node, isRequired: Boolean(node.isRequired) })),
+    nodes: nodes.map((node) => ({ ...node, isRequired: Boolean(node.isRequired), noteRequired: Boolean(node.noteRequired) })),
     nodeCount: nodes.length,
     hasRuns: template.runCount > 0,
     createdAt: template.createdAt,
@@ -56,8 +56,8 @@ export const templateService = {
         .run(id, userId, data.name, data.description, now, now);
       const insert = db.prepare(`
         INSERT INTO SopTemplateNode (
-          id, templateId, name, description, sortOrder, isRequired, parentId, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, templateId, name, description, sortOrder, isRequired, noteRequired, parentId, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const assignedIds = data.nodes.map(() => randomUUID());
       const idMap = new Map(
@@ -71,6 +71,7 @@ export const templateService = {
           node.description,
           index + 1,
           node.isRequired ? 1 : 0,
+          node.noteRequired ? 1 : 0,
           node.parentId ? idMap.get(node.parentId) ?? null : null,
           now,
           now,
@@ -90,8 +91,8 @@ export const templateService = {
       db.prepare("DELETE FROM SopTemplateNode WHERE templateId = ?").run(id);
       const insert = db.prepare(`
         INSERT INTO SopTemplateNode (
-          id, templateId, name, description, sortOrder, isRequired, parentId, createdAt, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, templateId, name, description, sortOrder, isRequired, noteRequired, parentId, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const assignedIds = data.nodes.map(() => randomUUID());
       const idMap = new Map(
@@ -105,6 +106,7 @@ export const templateService = {
           node.description,
           index + 1,
           node.isRequired ? 1 : 0,
+          node.noteRequired ? 1 : 0,
           node.parentId ? idMap.get(node.parentId) ?? null : null,
           now,
           now,

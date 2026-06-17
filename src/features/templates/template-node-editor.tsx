@@ -8,6 +8,7 @@ export type TemplateNodeForm = {
   name: string;
   description: string;
   isRequired: boolean;
+  noteRequired: boolean;
   parentId: string | null;
 };
 
@@ -24,6 +25,7 @@ export function createTemplateNode(parentId: string | null = null): TemplateNode
     name: "",
     description: "",
     isRequired: true,
+    noteRequired: false,
     parentId,
   };
 }
@@ -107,16 +109,28 @@ export function TemplateNodeEditor({
               {isParent ? (
                 <span className="badge not-started">父节点 · 自动完成</span>
               ) : (
-                <label className="required-toggle">
-                  <input
-                    checked={node.isRequired}
-                    type="checkbox"
-                    onChange={(event) =>
-                      updateNode(node.id, { isRequired: event.target.checked })
-                    }
-                  />
-                  必须完成
-                </label>
+                <>
+                  <label className="required-toggle">
+                    <input
+                      checked={node.isRequired}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateNode(node.id, { isRequired: event.target.checked })
+                      }
+                    />
+                    必须完成
+                  </label>
+                  <label className="required-toggle">
+                    <input
+                      checked={node.noteRequired}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateNode(node.id, { noteRequired: event.target.checked })
+                      }
+                    />
+                    需要必填备注才能完成
+                  </label>
+                </>
               )}
               {!isChild ? (
                 <button

@@ -306,6 +306,7 @@ PATCH /api/runs/:id/nodes/:nodeId/completion
 常见冲突：
 
 - `PARENT_NODE_READ_ONLY`：尝试直接修改父节点。
+- `NOTE_REQUIRED`：节点要求必填备注才能完成，请先添加备注。
 
 ### 更新节点备注
 

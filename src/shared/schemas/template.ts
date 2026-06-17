@@ -7,6 +7,7 @@ export const templateNodeInputSchema = z.object({
   description: optionalText(1000),
   sortOrder: z.number().int().positive(),
   isRequired: z.boolean().default(true),
+  noteRequired: z.boolean().default(false),
   parentId: z.string().min(1).optional().nullable(),
 });
 

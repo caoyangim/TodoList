@@ -90,6 +90,14 @@ export function RunDetailPage({ runId }: { runId: string }) {
       setPendingUncheck(node);
       return;
     }
+    if (node.noteRequired) {
+      const hasContent = node.note && (node.note.html.trim().length > 0 || node.note.files.length > 0);
+      if (!hasContent) {
+        setError("该节点要求必填备注才能完成，请先添加备注");
+        openNote(node);
+        return;
+      }
+    }
     void toggleNode(node.id, true);
   }
 
@@ -298,10 +306,17 @@ export function RunDetailPage({ runId }: { runId: string }) {
             <div className="item-meta">
               {node.isParent ? (
                 <span className="badge not-started">父节点 · 自动完成</span>
-              ) : node.isRequired ? (
-                <span className="badge high">必须</span>
               ) : (
-                <span className="badge low">可选</span>
+                <>
+                  {node.isRequired ? (
+                    <span className="badge high">必须</span>
+                  ) : (
+                    <span className="badge low">可选</span>
+                  )}
+                  {node.noteRequired ? (
+                    <span className="badge high">备注必填</span>
+                  ) : null}
+                </>
               )}
               {node.firstCompletedAt ? (
                 <span>首次完成：{new Date(node.firstCompletedAt).toLocaleString("zh-CN")}</span>

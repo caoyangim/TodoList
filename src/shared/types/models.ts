@@ -33,6 +33,7 @@ export type TemplateNodeDto = {
   description: string | null;
   sortOrder: number;
   isRequired: boolean;
+  noteRequired: boolean;
   parentId: string | null;
 };
 
@@ -87,6 +88,7 @@ export type RunNodeDto = {
   note: NoteContentDto | null;
   sortOrder: number;
   isRequired: boolean;
+  noteRequired: boolean;
   parentId: string | null;
   isParent: boolean;
   completedAt: string | null;
