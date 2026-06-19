@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckSquare, ClipboardList, KeyRound, ListChecks, LogOut, Users } from "lucide-react";
+import { CheckSquare, ClipboardList, KeyRound, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { CurrentUserDto } from "@/shared/types/models";
+import { useSidebarStore } from "@/shared/stores/sidebar-store";
 
 const links = [
   { href: "/todos", label: "Todo", icon: CheckSquare },
@@ -19,6 +20,7 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
   const router = useRouter();
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const { collapsed, toggle } = useSidebarStore();
 
   useEffect(() => {
     void fetch("/api/auth/me");
@@ -33,10 +35,18 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
 
   return (
     <>
-      <aside className="sidebar">
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
         <div className="brand">
           <span className="brand-mark"><CheckSquare size={18} /></span>
-          TodoFlow
+          <span className="brand-text">TodoFlow</span>
+          <button
+            aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+            className="sidebar-toggle"
+            type="button"
+            onClick={toggle}
+          >
+            {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
         </div>
         <nav className="nav-list">
           {links.map(({ href, label, icon: Icon }) => (
@@ -44,34 +54,37 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
               className={`nav-link ${pathname.startsWith(href) ? "active" : ""}`}
               href={href}
               key={href}
+              title={collapsed ? label : undefined}
             >
               <Icon size={18} />
-              {label}
+              <span className="nav-label">{label}</span>
             </Link>
           ))}
         </nav>
         <div className="nav-account">
           <div className="nav-username">{user.username}</div>
           {user.role === "ADMIN" && (
-            <Link className="nav-link" href="/admin/users">
+            <Link className="nav-link" href="/admin/users" title={collapsed ? "账号管理" : undefined}>
               <Users size={17} />
-              账号管理
+              <span className="nav-label">账号管理</span>
             </Link>
           )}
           <Link
             className={`nav-link ${pathname.startsWith("/account") ? "active" : ""}`}
             href="/account"
+            title={collapsed ? "账号设置" : undefined}
           >
             <KeyRound size={17} />
-            账号设置
+            <span className="nav-label">账号设置</span>
           </Link>
           <button
             className="nav-link nav-button"
             type="button"
             onClick={() => setConfirmingLogout(true)}
+            title={collapsed ? "退出登录" : undefined}
           >
             <LogOut size={17} />
-            退出登录
+            <span className="nav-label">退出登录</span>
           </button>
         </div>
       </aside>

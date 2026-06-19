@@ -1,0 +1,236 @@
+.node-note-input {
+  min-height: 140px;
+}
+
+.rich-note-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.rich-note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px;
+  background: #f8f6f4;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 7px 7px 0 0;
+}
+
+.rich-note-toolbar .button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  color: #5d554f;
+  background: transparent;
+  border-color: transparent;
+}
+
+.rich-note-toolbar .button:hover {
+  color: var(--accent);
+  background: #eee9e4;
+}
+
+.rich-note-toolbar .button.active,
+.rich-note-toolbar .button[aria-pressed="true"] {
+  color: white;
+  background: var(--accent);
+}
+
+.rich-note-toolbar .button:disabled {
+  color: #aaa19a;
+  background: transparent;
+}
+
+.rich-note-link-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 10px;
+  margin-top: -10px;
+  color: #5d554f;
+  font-size: 12px;
+  background: #fff8e8;
+  border: 1px solid #e5d5ac;
+  border-bottom: 0;
+}
+
+.rich-note-link-status span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-note-link-status button {
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.rich-note-link-status + .rich-note-input {
+  margin-top: -10px;
+}
+
+.rich-note-input {
+  min-height: 150px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  margin-top: -10px;
+  line-height: 1.65;
+  color: var(--foreground);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 0 0 7px 7px;
+  outline: none;
+  word-break: break-word;
+}
+
+.rich-note-input:focus {
+  border-color: #b8aaa0;
+  box-shadow: 0 0 0 2px rgb(184 170 160 / 15%);
+}
+
+.rich-note-input:empty::before {
+  color: #9a918a;
+  pointer-events: none;
+  content: "记录执行情况；支持富文本、链接和粘贴图片";
+}
+
+.rich-note-input p,
+.rich-note-input blockquote {
+  margin: 0 0 6px;
+}
+
+.rich-note-input ul,
+.rich-note-input ol {
+  padding-left: 22px;
+}
+
+.rich-note-input a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+
+.error-text {
+  color: #b3261e;
+}
+
+.note-image-grid,
+.note-file-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.note-image-preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  margin: 0;
+  background: #f3f1ef;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.note-image-preview img,
+.note-image-grid.display img,
+.note-file-grid.display img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.note-image-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-height: 30px;
+  color: var(--danger);
+  background: rgb(255 255 255 / 92%);
+}
+
+.note-image-grid.display,
+.note-file-grid.display {
+  margin-top: 9px;
+}
+
+.note-image-grid.display a,
+.note-file-grid.display a {
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.note-file-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  background: #f9f9f9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  position: relative;
+  text-align: center;
+  min-height: 100px;
+  justify-content: center;
+}
+
+.note-file-card.display {
+  text-decoration: none;
+  color: var(--text);
+  aspect-ratio: auto;
+  overflow: hidden;
+  transition: background 0.15s;
+}
+
+.note-file-card.display:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.note-file-card-name {
+  font-size: 12px;
+  word-break: break-all;
+  line-height: 1.3;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-file-card-size {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.rich-note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rich-note-tools,
+.paste-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paste-hint {
+  color: var(--muted);
+  font-size: 12px;
+}

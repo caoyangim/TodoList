@@ -1,0 +1,14 @@
+:root {
+  --background: #faf9f7;
+  --surface: #ffffff;
+  --sidebar: #f5f3f1;
+  --text: #202020;
+  --muted: #6b6b6b;
+  --line: #e8e5e2;
+  --accent: #dc4c3e;
+  --accent-hover: #c83f33;
+  --accent-soft: #fff0ee;
+  --success: #2f8f5b;
+  --warning: #c47f17;
+  --danger: #c5362b;
+}
