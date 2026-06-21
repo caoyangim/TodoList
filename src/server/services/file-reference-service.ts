@@ -65,8 +65,15 @@ export const fileReferenceService = {
 
     // 查询 SopRunNode 中的 note
     const runNodeRows = db
-      .prepare("SELECT id, note FROM SopRunNode WHERE note IS NOT NULL")
-      .all() as { id: string; note: string | null }[];
+      .prepare(
+        `
+        SELECT node.id, node.note
+        FROM SopRunNode node
+        INNER JOIN SopRun run ON run.id = node.runId
+        WHERE run.userId = ? AND node.note IS NOT NULL
+      `,
+      )
+      .all(userId) as { id: string; note: string | null }[];
 
     for (const row of runNodeRows) {
       if (row.note && this.extractFileIds(row.note).includes(fileId)) {

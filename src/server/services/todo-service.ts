@@ -237,38 +237,31 @@ export const todoService = {
   },
 
   async remove(userId: string, id: string) {
-    const todo = await this.get(userId, id);
+    await this.get(userId, id);
+    let allFileIds: string[] = [];
 
-    // 使用事务确保 Todo 和文件清理的一致性
     db.transaction(() => {
-      // 1. 收集所有关联的文件 ID
       const noteFileIds = fileReferenceService.getFileIdsFromContent("Todo", id, "note");
       const reportFileIds = fileReferenceService.getFileIdsFromContent(
         "Todo",
         id,
         "verificationReport",
       );
-      const allFileIds = [...new Set([...noteFileIds, ...reportFileIds])];
+      allFileIds = [...new Set([...noteFileIds, ...reportFileIds])];
 
-      // 2. 删除 Todo 记录
       const result = db.prepare("DELETE FROM Todo WHERE id = ? AND userId = ?").run(id, userId);
       if (result.changes === 0) {
         throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
       }
-
-      // 3. 清理孤立文件（不在事务内部，避免事务被文件系统错误打断）
-      for (const fileId of allFileIds) {
-        // 检查文件是否还被其他记录引用
-        if (!fileReferenceService.isFileReferenced(userId, fileId)) {
-          // 异步清理孤立文件，不阻塞 Todo 删除
-          Promise.resolve().then(() => {
-            noteFileService.remove(userId, fileId).catch(() => {
-              // 忽略清理失败的错误
-            });
-          });
-        }
-      }
     })();
+
+    for (const fileId of allFileIds) {
+      if (!fileReferenceService.isFileReferenced(userId, fileId)) {
+        void noteFileService.remove(userId, fileId).catch(() => {
+          // 忽略清理失败的错误
+        });
+      }
+    }
   },
 
   async setNote(userId: string, id: string, input: unknown) {

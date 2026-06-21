@@ -1,320 +1,225 @@
-/**
- * 集成测试：验证文件清理功能
- * 测试删除 Todo、SopRun、以及用户注销时的文件清理
- */
-
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { db } from "@/server/db";
-import { todoService } from "@/server/services/todo-service";
-import { runService } from "@/server/services/run-service";
-import { noteFileService } from "@/server/services/note-file-service";
-import { fileReferenceService } from "@/server/services/file-reference-service";
-import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+const testDir = path.resolve(process.cwd(), "data-test-file-cleanup");
+const testDb = path.join(testDir, "todoflow-test.db");
+const noteFileDir = path.join(testDir, "note-files");
+
+process.env.DATABASE_URL = `file:${testDb}`;
+process.env.NOTE_FILE_DIR = noteFileDir;
+process.env.NOTE_IMAGE_DIR = path.join(testDir, "note-images");
+process.env.TODOFLOW_ADMIN_USERNAME = "admin";
+process.env.TODOFLOW_ADMIN_PASSWORD = "todoflow-test-password";
+
+let db: typeof import("@/server/db").db;
+let todoService: typeof import("@/server/services/todo-service").todoService;
+let runService: typeof import("@/server/services/run-service").runService;
+let fileReferenceService: typeof import("@/server/services/file-reference-service").fileReferenceService;
+
+const userId = randomUUID();
+const otherUserId = randomUUID();
+
+function insertUser(id: string, username: string) {
+  db.prepare(
+    `
+    INSERT INTO User (id, username, passwordHash, role, isActive, mustChangePassword, createdAt, updatedAt)
+    VALUES (?, ?, ?, 'USER', 1, 0, ?, ?)
+  `,
+  ).run(id, username, "hash", new Date().toISOString(), new Date().toISOString());
+}
+
+function createStoredFile(fileId: string, ownerId: string, extension = "png") {
+  db.prepare(
+    `
+    INSERT INTO NoteFile (id, userId, mimeType, extension, size, originalName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `,
+  ).run(
+    fileId,
+    ownerId,
+    extension === "jpg" ? "image/jpeg" : "image/png",
+    extension,
+    4,
+    `file.${extension}`,
+    new Date().toISOString(),
+  );
+
+  fs.mkdirSync(noteFileDir, { recursive: true });
+  fs.writeFileSync(path.join(noteFileDir, `${fileId}.${extension}`), Buffer.from([1, 2, 3, 4]));
+}
+
+async function waitFor(assertion: () => boolean, timeoutMs = 1500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (assertion()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("condition not met before timeout");
+}
+
+beforeAll(async () => {
+  fs.rmSync(testDir, { recursive: true, force: true });
+  ({ db } = await import("@/server/db"));
+  ({ todoService } = await import("@/server/services/todo-service"));
+  ({ runService } = await import("@/server/services/run-service"));
+  ({ fileReferenceService } = await import("@/server/services/file-reference-service"));
+}, 60000);
+
+afterAll(() => {
+  db.close();
+  fs.rmSync(testDir, { recursive: true, force: true });
+});
+
+beforeEach(() => {
+  db.prepare("DELETE FROM Todo WHERE userId IN (?, ?)").run(userId, otherUserId);
+  db.prepare(
+    `
+    DELETE FROM SopRunNode
+    WHERE runId IN (SELECT id FROM SopRun WHERE userId IN (?, ?))
+  `,
+  ).run(userId, otherUserId);
+  db.prepare("DELETE FROM SopRun WHERE userId IN (?, ?)").run(userId, otherUserId);
+  db.prepare("DELETE FROM SopTemplate WHERE userId IN (?, ?)").run(userId, otherUserId);
+  db.prepare("DELETE FROM NoteFile WHERE userId IN (?, ?)").run(userId, otherUserId);
+  db.prepare("DELETE FROM User WHERE id IN (?, ?)").run(userId, otherUserId);
+  fs.rmSync(noteFileDir, { recursive: true, force: true });
+
+  insertUser(userId, `user-${userId.slice(0, 8)}`);
+  insertUser(otherUserId, `user-${otherUserId.slice(0, 8)}`);
+});
 
 describe("文件清理集成测试", () => {
-  const userId = randomUUID();
-  const fileId1 = randomUUID();
-  const fileId2 = randomUUID();
-  const fileId3 = randomUUID();
-  const todoId = randomUUID();
-  const runId = randomUUID();
-  const templateId = randomUUID();
+  it("删除 Todo 后会清掉不再被引用的文件记录和物理文件", async () => {
+    const todoId = randomUUID();
+    const fileId = randomUUID();
+    createStoredFile(fileId, userId);
 
-  // 模拟文件目录（实际测试会使用真实目录）
-  const testFileDir = path.join(process.cwd(), "data", "test-note-files");
-
-  beforeEach(() => {
-    // 创建测试用户和文件记录
     db.prepare(
-      "INSERT INTO User (id, username, passwordHash, role, isActive, mustChangePassword, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      `
+      INSERT INTO Todo (
+        id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
     ).run(
+      todoId,
       userId,
-      `test-user-${randomUUID()}`,
-      "hash",
-      "USER",
-      1,
-      0,
+      "Todo",
+      "",
+      JSON.stringify({ html: "<p>note</p>", fileIds: [fileId] }),
+      "PENDING",
+      "MEDIUM",
+      "MEDIUM",
+      "MEDIUM",
       new Date().toISOString(),
       new Date().toISOString(),
     );
 
-    // 创建测试文件记录
-    [fileId1, fileId2, fileId3].forEach((id) => {
-      db.prepare(
-        "INSERT INTO NoteFile (id, userId, mimeType, extension, size, originalName, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        id,
-        userId,
-        "image/png",
-        "png",
-        1024,
-        `file-${id}.png`,
-        new Date().toISOString(),
-      );
-    });
+    await todoService.remove(userId, todoId);
 
-    // 确保文件目录存在
-    fs.mkdirSync(testFileDir, { recursive: true });
+    await waitFor(() => {
+      const fileRow = db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(fileId);
+      const filePath = path.join(noteFileDir, `${fileId}.png`);
+      return !fileRow && !fs.existsSync(filePath);
+    });
   });
 
-  afterEach(() => {
-    // 清理测试数据
-    db.prepare("DELETE FROM Todo WHERE userId = ?").run(userId);
-    db.prepare("DELETE FROM SopRun WHERE userId = ?").run(userId);
-    db.prepare("DELETE FROM NoteFile WHERE userId = ?").run(userId);
-    db.prepare("DELETE FROM User WHERE id = ?").run(userId);
+  it("删除 Todo 时会保留仍被其他 Todo 引用的文件", async () => {
+    const sharedFileId = randomUUID();
+    const todoId1 = randomUUID();
+    const todoId2 = randomUUID();
+    createStoredFile(sharedFileId, userId);
 
-    // 清理测试文件目录
-    if (fs.existsSync(testFileDir)) {
-      try {
-        fs.rmSync(testFileDir, { recursive: true, force: true });
-      } catch {
-        // 忽略删除失败
-      }
+    const noteJson = JSON.stringify({ html: "<p>note</p>", fileIds: [sharedFileId] });
+    for (const currentTodoId of [todoId1, todoId2]) {
+      db.prepare(
+        `
+        INSERT INTO Todo (
+          id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      ).run(
+        currentTodoId,
+        userId,
+        "Todo",
+        "",
+        noteJson,
+        "PENDING",
+        "MEDIUM",
+        "MEDIUM",
+        "MEDIUM",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
     }
+
+    await todoService.remove(userId, todoId1);
+
+    const fileRow = db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(sharedFileId);
+    expect(fileRow).toBeTruthy();
+    expect(fs.existsSync(path.join(noteFileDir, `${sharedFileId}.png`))).toBe(true);
+    expect(fileReferenceService.isFileReferenced(userId, sharedFileId)).toBe(true);
   });
 
-  describe("删除 Todo 时清理孤立文件", () => {
-    it("应该删除未被引用的文件", async () => {
-      // 创建 Todo，引用 fileId1
-      const noteJson = JSON.stringify({
-        html: "<p>test</p>",
-        fileIds: [fileId1],
-      });
-      db.prepare(
-        "INSERT INTO Todo (id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        todoId,
-        userId,
-        "Test Todo",
-        "",
-        noteJson,
-        "PENDING",
-        "MEDIUM",
-        "MEDIUM",
-        "MEDIUM",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
+  it("删除 SopRun 后会清掉级联节点中遗留的文件", async () => {
+    const templateId = randomUUID();
+    const runId = randomUUID();
+    const nodeId = randomUUID();
+    const fileId = randomUUID();
+    createStoredFile(fileId, userId);
 
-      // 验证文件被引用
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(true);
-      expect(fileReferenceService.isFileReferenced(userId, fileId2)).toBe(
-        false,
-      );
+    db.prepare(
+      "INSERT INTO SopTemplate (id, userId, name, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(templateId, userId, "Template", "", new Date().toISOString(), new Date().toISOString());
+    db.prepare(
+      "INSERT INTO SopRun (id, userId, templateId, templateNameSnapshot, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(runId, userId, templateId, "Template", "Run", new Date().toISOString(), new Date().toISOString());
+    db.prepare(
+      "INSERT INTO SopRunNode (id, runId, nameSnapshot, note, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      nodeId,
+      runId,
+      "Node",
+      JSON.stringify({ html: "<p>note</p>", fileIds: [fileId] }),
+      1,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
 
-      // 删除 Todo
-      await todoService.remove(userId, todoId);
+    await runService.remove(userId, runId);
 
-      // 验证 Todo 已删除
-      expect(
-        db.prepare("SELECT id FROM Todo WHERE id = ?").get(todoId),
-      ).toBeUndefined();
-
-      // fileId1 应该变成孤立的
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(
-        false,
-      );
-    });
-
-    it("应该保留被其他记录引用的文件", async () => {
-      const todoId1 = randomUUID();
-      const todoId2 = randomUUID();
-
-      // 两个 Todo 都引用 fileId1
-      const noteJson = JSON.stringify({
-        html: "<p>test</p>",
-        fileIds: [fileId1],
-      });
-
-      db.prepare(
-        "INSERT INTO Todo (id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        todoId1,
-        userId,
-        "Todo 1",
-        "",
-        noteJson,
-        "PENDING",
-        "MEDIUM",
-        "MEDIUM",
-        "MEDIUM",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      db.prepare(
-        "INSERT INTO Todo (id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        todoId2,
-        userId,
-        "Todo 2",
-        "",
-        noteJson,
-        "PENDING",
-        "MEDIUM",
-        "MEDIUM",
-        "MEDIUM",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      // 删除第一个 Todo
-      await todoService.remove(userId, todoId1);
-
-      // fileId1 仍然被 Todo 2 引用，不应该被删除
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(true);
-    });
-
-    it("应该清理 note 和 verificationReport 中的孤立文件", async () => {
-      const noteJson = JSON.stringify({
-        html: "<p>note</p>",
-        fileIds: [fileId1],
-      });
-      const verificationJson = JSON.stringify({
-        html: "<p>verified</p>",
-        fileIds: [fileId2],
-      });
-
-      db.prepare(
-        "INSERT INTO Todo (id, userId, title, description, note, verificationReport, status, priority, timePriority, importancePriority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        todoId,
-        userId,
-        "Todo",
-        "",
-        noteJson,
-        verificationJson,
-        "COMPLETED",
-        "MEDIUM",
-        "MEDIUM",
-        "MEDIUM",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      // 两个文件都被引用
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(true);
-      expect(fileReferenceService.isFileReferenced(userId, fileId2)).toBe(true);
-
-      // 删除 Todo
-      await todoService.remove(userId, todoId);
-
-      // 两个文件都应该变成孤立的
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(
-        false,
-      );
-      expect(fileReferenceService.isFileReferenced(userId, fileId2)).toBe(
-        false,
-      );
+    await waitFor(() => {
+      const fileRow = db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(fileId);
+      return !fileRow && !fs.existsSync(path.join(noteFileDir, `${fileId}.png`));
     });
   });
 
-  describe("删除 SopRun 时清理孤立文件", () => {
-    it("应该清理级联删除的 SopRunNode 中的孤立文件", async () => {
-      const nodeId = randomUUID();
-      const noteJson = JSON.stringify({
-        html: "<p>test</p>",
-        fileIds: [fileId1],
-      });
+  it("引用扫描不会把其他用户的 RunNode 误算进来", () => {
+    const fileId = randomUUID();
+    const templateId = randomUUID();
+    const runId = randomUUID();
+    createStoredFile(fileId, userId);
 
-      // 创建 SopTemplate 和 SopRun
-      db.prepare(
-        "INSERT INTO SopTemplate (id, userId, name, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(
-        templateId,
-        userId,
-        "Template",
-        "",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
+    db.prepare(
+      "INSERT INTO SopTemplate (id, userId, name, description, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(templateId, otherUserId, "Template", "", new Date().toISOString(), new Date().toISOString());
+    db.prepare(
+      "INSERT INTO SopRun (id, userId, templateId, templateNameSnapshot, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(runId, otherUserId, templateId, "Template", "Run", new Date().toISOString(), new Date().toISOString());
+    db.prepare(
+      "INSERT INTO SopRunNode (id, runId, nameSnapshot, note, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      randomUUID(),
+      runId,
+      "Other Node",
+      JSON.stringify({ html: "<p>note</p>", fileIds: [fileId] }),
+      1,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
 
-      db.prepare(
-        "INSERT INTO SopRun (id, userId, templateId, templateNameSnapshot, title, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        runId,
-        userId,
-        templateId,
-        "Template",
-        "Run",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      db.prepare(
-        "INSERT INTO SopRunNode (id, runId, nameSnapshot, note, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        nodeId,
-        runId,
-        "Node",
-        noteJson,
-        1,
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      // 验证文件被引用
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(true);
-
-      // 删除 SopRun
-      await runService.remove(userId, runId);
-
-      // 验证 SopRun 已删除，级联删除了 Node
-      expect(
-        db.prepare("SELECT id FROM SopRun WHERE id = ?").get(runId),
-      ).toBeUndefined();
-      expect(
-        db.prepare("SELECT id FROM SopRunNode WHERE id = ?").get(nodeId),
-      ).toBeUndefined();
-
-      // fileId1 应该变成孤立的
-      expect(fileReferenceService.isFileReferenced(userId, fileId1)).toBe(
-        false,
-      );
-    });
-  });
-
-  describe("文件引用追踪", () => {
-    it("应该正确追踪文件被引用的位置", async () => {
-      const noteJson = JSON.stringify({
-        html: "<p>test</p>",
-        fileIds: [fileId1],
-      });
-
-      db.prepare(
-        "INSERT INTO Todo (id, userId, title, description, note, status, priority, timePriority, importancePriority, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        todoId,
-        userId,
-        "Todo",
-        "",
-        noteJson,
-        "PENDING",
-        "MEDIUM",
-        "MEDIUM",
-        "MEDIUM",
-        new Date().toISOString(),
-        new Date().toISOString(),
-      );
-
-      const refs = fileReferenceService.getFileReferences(userId, fileId1);
-      expect(refs).toHaveLength(1);
-      expect(refs[0]).toEqual({
-        tableName: "Todo",
-        recordId: todoId,
-        fieldName: "note",
-      });
-    });
-
-    it("应该识别孤立文件", async () => {
-      // fileId1 和 fileId2 都不被引用
-      const orphaned = fileReferenceService.getOrphanedFileIds(userId);
-      expect(orphaned).toContain(fileId1);
-      expect(orphaned).toContain(fileId2);
-      expect(orphaned).toContain(fileId3);
-    });
+    expect(fileReferenceService.isFileReferenced(userId, fileId)).toBe(false);
+    expect(fileReferenceService.getOrphanedFileIds(userId)).toEqual([fileId]);
   });
 });

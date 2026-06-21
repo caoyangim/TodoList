@@ -493,32 +493,25 @@ export const runService = {
 
   async remove(userId: string, id: string) {
     await this.get(userId, id);
+    let allFileIds: string[] = [];
 
     db.transaction(() => {
-      // 1. 收集所有 SopRunNode 中的文件 ID
-      const allFileIds = fileReferenceService.getRunFileIds(id);
+      allFileIds = fileReferenceService.getRunFileIds(id);
 
-      // 2. 清除 Todo 关联
       db.prepare("UPDATE Todo SET runId = NULL WHERE runId = ? AND userId = ?").run(
         id,
         userId,
       );
 
-      // 3. 删除 SopRun（级联删除 SopRunNode）
       db.prepare("DELETE FROM SopRun WHERE id = ? AND userId = ?").run(id, userId);
-
-      // 4. 清理孤立文件（不在事务内部，避免被文件系统错误打断）
-      for (const fileId of allFileIds) {
-        // 检查文件是否还被其他记录引用
-        if (!fileReferenceService.isFileReferenced(userId, fileId)) {
-          // 异步清理孤立文件，不阻塞 SopRun 删除
-          Promise.resolve().then(() => {
-            noteFileService.remove(userId, fileId).catch(() => {
-              // 忽略清理失败的错误
-            });
-          });
-        }
-      }
     })();
+
+    for (const fileId of allFileIds) {
+      if (!fileReferenceService.isFileReferenced(userId, fileId)) {
+        void noteFileService.remove(userId, fileId).catch(() => {
+          // 忽略清理失败的错误
+        });
+      }
+    }
   },
 };

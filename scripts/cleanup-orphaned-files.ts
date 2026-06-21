@@ -28,9 +28,14 @@ const mode = args.includes("--delete")
 interface OrphanedFile {
   fileId: string;
   userId: string;
+  extension: string;
   path: string;
   sizeKb: number;
   createdAt: string;
+}
+
+function getStoredFilename(fileId: string, extension: string) {
+  return extension ? `${fileId}.${extension}` : fileId;
 }
 
 function formatSize(bytes: number): string {
@@ -54,8 +59,14 @@ function scanOrphanedFiles(): OrphanedFile[] {
 
   // 获取数据库中所有文件
   const allFiles = db
-    .prepare("SELECT id, userId, size, createdAt FROM NoteFile")
-    .all() as { id: string; userId: string; size: number; createdAt: string }[];
+    .prepare("SELECT id, userId, extension, size, createdAt FROM NoteFile")
+    .all() as {
+      id: string;
+      userId: string;
+      extension: string;
+      size: number;
+      createdAt: string;
+    }[];
 
   console.log(`\n📊 扫描孤立文件...\n`);
   console.log(`   数据库中文件总数: ${allFiles.length}`);
@@ -63,7 +74,8 @@ function scanOrphanedFiles(): OrphanedFile[] {
   for (const file of allFiles) {
     // 检查文件是否被引用
     if (!fileReferenceService.isFileReferenced(file.userId, file.id)) {
-      const filePath = path.join(fileDirectory, file.id);
+      const filename = getStoredFilename(file.id, file.extension);
+      const filePath = path.join(fileDirectory, filename);
       let actualSize = file.size;
 
       // 检查文件是否存在于文件系统
@@ -74,6 +86,7 @@ function scanOrphanedFiles(): OrphanedFile[] {
       orphaned.push({
         fileId: file.id,
         userId: file.userId,
+        extension: file.extension,
         path: filePath,
         sizeKb: Math.ceil(actualSize / 1024),
         createdAt: file.createdAt,
@@ -146,7 +159,10 @@ function deleteOrphanedFiles(orphaned: OrphanedFile[]): void {
       }
 
       // 从数据库删除记录
-      db.prepare("DELETE FROM NoteFile WHERE id = ?").run(file.fileId);
+      db.prepare("DELETE FROM NoteFile WHERE id = ? AND userId = ?").run(
+        file.fileId,
+        file.userId,
+      );
     } catch (error) {
       console.log(
         `   ✗ 删除失败: ${file.fileId} - ${error instanceof Error ? error.message : "未知错误"}`,
@@ -173,7 +189,10 @@ function archiveOrphanedFiles(orphaned: OrphanedFile[]): void {
 
   for (const file of orphaned) {
     try {
-      const archivePath = path.join(archiveDirectory, file.fileId);
+      const archivePath = path.join(
+        archiveDirectory,
+        getStoredFilename(file.fileId, file.extension),
+      );
 
       if (fs.existsSync(file.path)) {
         fs.renameSync(file.path, archivePath);
@@ -186,7 +205,10 @@ function archiveOrphanedFiles(orphaned: OrphanedFile[]): void {
       }
 
       // 从数据库删除记录
-      db.prepare("DELETE FROM NoteFile WHERE id = ?").run(file.fileId);
+      db.prepare("DELETE FROM NoteFile WHERE id = ? AND userId = ?").run(
+        file.fileId,
+        file.userId,
+      );
     } catch (error) {
       console.log(
         `   ✗ 归档失败: ${file.fileId} - ${error instanceof Error ? error.message : "未知错误"}`,

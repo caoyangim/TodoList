@@ -4,7 +4,6 @@ import path from "node:path";
 import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
-import { fileReferenceService } from "@/server/services/file-reference-service";
 import { noteFileService } from "@/server/services/note-file-service";
 import {
   changePasswordSchema,
@@ -444,8 +443,6 @@ export const authService = {
 
     const stagedFiles = stageAccountFiles(user.id);
     try {
-      // 1. 收集所有孤立文件（用户所有数据删除后将变成孤立）
-      const orphanedFileIds = fileReferenceService.getOrphanedFileIds(user.id);
       const allUserFileIds = (
         db.prepare("SELECT id FROM NoteFile WHERE userId = ?").all(user.id) as { id: string }[]
       ).map((row) => row.id);
