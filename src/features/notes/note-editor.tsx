@@ -11,12 +11,14 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  ImagePlus,
   Info,
   Link2,
   List,
   ListOrdered,
   Minus,
   ExternalLink,
+  Paperclip,
   Quote,
   RemoveFormatting,
   Save,
@@ -29,8 +31,9 @@ import { useEffect, useRef, useState } from "react";
 import { LoadingSpinner } from "@/components/loading";
 import { getApiErrorMessage } from "@/shared/api-client";
 import { uploadNoteImage } from "@/shared/note-image-client";
+import { uploadNoteFile } from "@/shared/note-file-client";
 import { createNoteEditorExtensions, NoteDocumentDto } from "@/shared/note-document";
-import { NoteDto } from "@/shared/types/models";
+import { NoteDto, NoteFileDto } from "@/shared/types/models";
 
 type SlashCommandItem = {
   id: string;
@@ -167,6 +170,7 @@ export function NoteEditor({
   onDelete: () => void;
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
@@ -176,10 +180,15 @@ export function NoteEditor({
   const editorRef = useRef<Editor | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const busy = saving || deleting;
 
   function openImagePicker() {
     imageInputRef.current?.click();
+  }
+
+  function openFilePicker() {
+    fileInputRef.current?.click();
   }
 
   function insertBasicTable() {
@@ -267,6 +276,49 @@ export function NoteEditor({
     setUploadError("");
     setPendingImageUploads((current) => [...current, ...placeholders]);
     void processImageUploadBatch(placeholders, "图片上传失败");
+  }
+
+  async function handleFileUpload(files: File[]) {
+    const currentEditor = editorRef.current;
+    if (!currentEditor || files.length === 0) return;
+
+    setUploadError("");
+    setUploadingFile(true);
+    try {
+      const uploaded = await Promise.all(files.map(uploadNoteFile));
+      const pos = currentEditor.state.selection.from;
+      currentEditor
+        .chain()
+        .focus()
+        .insertContentAt(
+          pos,
+          uploaded.map((file: NoteFileDto) => ({
+            type: "paragraph",
+            content: [
+              {
+                type: "text",
+                text: file.originalName,
+                marks: [
+                  {
+                    type: "link",
+                    attrs: {
+                      href: file.url,
+                      target: "_blank",
+                      rel: "noreferrer noopener",
+                    },
+                  },
+                ],
+              },
+            ],
+          })),
+        )
+        .run();
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "文件上传失败");
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   async function processImageUploadBatch(
@@ -772,6 +824,16 @@ export function NoteEditor({
       active: editor?.isActive("link"),
       action: setLink,
     },
+    {
+      label: "上传图片",
+      icon: <ImagePlus size={15} />,
+      action: openImagePicker,
+    },
+    {
+      label: "上传文件",
+      icon: <Paperclip size={15} />,
+      action: openFilePicker,
+    },
   ];
 
   return (
@@ -788,6 +850,17 @@ export function NoteEditor({
         ref={imageInputRef}
         type="file"
       />
+      <input
+        className="sr-only"
+        multiple
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          void handleFileUpload(files);
+          event.target.value = "";
+        }}
+        ref={fileInputRef}
+        type="file"
+      />
       <header className="note-editor-header">
         <input
           aria-label="Note 标题"
@@ -800,7 +873,7 @@ export function NoteEditor({
         />
         <div className="note-editor-actions">
           <span className="note-save-state">
-            {uploadingImage ? "图片上传中" : saving ? "保存中" : dirty ? "正在编辑" : "已保存"}
+            {uploadingImage ? "图片上传中" : uploadingFile ? "文件上传中" : saving ? "保存中" : dirty ? "正在编辑" : "已保存"}
           </span>
           <button
             className="button"
@@ -830,7 +903,7 @@ export function NoteEditor({
             aria-label={button.label}
             aria-pressed={button.active}
             className={`button icon-only${button.active ? " active" : ""}`}
-            disabled={busy || !editor}
+            disabled={busy || !editor || uploadingImage || uploadingFile}
             key={button.label}
             onMouseDown={(event) => event.preventDefault()}
             onClick={button.action}
