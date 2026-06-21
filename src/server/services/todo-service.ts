@@ -6,6 +6,7 @@ import {
   sanitizeNoteHtml,
 } from "@/server/services/note-content-service";
 import { noteFileService } from "@/server/services/note-file-service";
+import { fileReferenceService } from "@/server/services/file-reference-service";
 import {
   todoInputSchema,
   todoListStatusSchema,
@@ -14,7 +15,11 @@ import {
   todoTransitionSchema,
 } from "@/shared/schemas/todo";
 import { calculateRunStatus } from "@/shared/run-status";
-import { NoteContentDto, TodoDto, TodoRunSummaryDto } from "@/shared/types/models";
+import {
+  NoteContentDto,
+  TodoDto,
+  TodoRunSummaryDto,
+} from "@/shared/types/models";
 
 type TodoRow = Omit<TodoDto, "note" | "verificationReport" | "run"> & {
   userId: string;
@@ -24,12 +29,22 @@ type TodoRow = Omit<TodoDto, "note" | "verificationReport" | "run"> & {
 };
 
 function getTodoRow(userId: string, id: string) {
-  return db.prepare("SELECT * FROM Todo WHERE id = ? AND userId = ?").get(id, userId) as TodoRow | undefined;
+  return db
+    .prepare("SELECT * FROM Todo WHERE id = ? AND userId = ?")
+    .get(id, userId) as TodoRow | undefined;
 }
 
-function parseRichContent(userId: string, value: string | null): NoteContentDto | null {
+function parseRichContent(
+  userId: string,
+  value: string | null,
+): NoteContentDto | null {
   if (!value) return null;
-  let parsed: { html?: string; text?: string; fileIds?: string[]; imageIds?: string[] };
+  let parsed: {
+    html?: string;
+    text?: string;
+    fileIds?: string[];
+    imageIds?: string[];
+  };
   try {
     parsed = JSON.parse(value) as {
       html?: string;
@@ -49,23 +64,34 @@ function parseRichContent(userId: string, value: string | null): NoteContentDto 
   };
 }
 
-function getRunSummary(userId: string, runId: string | null): TodoRunSummaryDto | null {
+function getRunSummary(
+  userId: string,
+  runId: string | null,
+): TodoRunSummaryDto | null {
   if (!runId) return null;
-  const run = db.prepare(`
+  const run = db
+    .prepare(
+      `
     SELECT id, title, startedAt, completedAt, archivedAt
     FROM SopRun WHERE id = ? AND userId = ?
-  `).get(runId, userId) as {
-    id: string;
-    title: string;
-    startedAt: string | null;
-    completedAt: string | null;
-    archivedAt: string | null;
-  } | undefined;
+  `,
+    )
+    .get(runId, userId) as
+    | {
+        id: string;
+        title: string;
+        startedAt: string | null;
+        completedAt: string | null;
+        archivedAt: string | null;
+      }
+    | undefined;
   if (!run) return null;
 
-  const nodes = db.prepare(
-    "SELECT id, parentId, isRequired, completedAt FROM SopRunNode WHERE runId = ?",
-  ).all(runId) as {
+  const nodes = db
+    .prepare(
+      "SELECT id, parentId, isRequired, completedAt FROM SopRunNode WHERE runId = ?",
+    )
+    .all(runId) as {
     id: string;
     parentId: string | null;
     isRequired: number;
@@ -76,7 +102,9 @@ function getRunSummary(userId: string, runId: string | null): TodoRunSummaryDto 
   const requiredLeaves = leaves.filter((node) => Boolean(node.isRequired));
   const progressLeaves = requiredLeaves.length > 0 ? requiredLeaves : leaves;
   const completedCount = leaves.filter((node) => node.completedAt).length;
-  const progressCompletedCount = progressLeaves.filter((node) => node.completedAt).length;
+  const progressCompletedCount = progressLeaves.filter(
+    (node) => node.completedAt,
+  ).length;
 
   return {
     id: run.id,
@@ -102,7 +130,10 @@ function toTodoDto(userId: string, row: TodoRow): TodoDto {
   };
 }
 
-function serializeRichContent(userId: string, input: { html: string; fileIds: string[] } | null) {
+function serializeRichContent(
+  userId: string,
+  input: { html: string; fileIds: string[] } | null,
+) {
   if (!input) return null;
   const content = sanitizeNoteHtml(input.html);
   if (content.textLength > 2000) {
@@ -111,7 +142,9 @@ function serializeRichContent(userId: string, input: { html: string; fileIds: st
   return !content.isEmpty || input.fileIds.length > 0
     ? JSON.stringify({
         html: content.html,
-        fileIds: noteFileService.getMany(userId, input.fileIds).map((file) => file.id),
+        fileIds: noteFileService
+          .getMany(userId, input.fileIds)
+          .map((file) => file.id),
       })
     : null;
 }
@@ -139,7 +172,7 @@ export const todoService = {
     `;
     return (
       db
-      .prepare(`SELECT * FROM Todo WHERE userId = ? ${where} ${orderBy}`)
+        .prepare(`SELECT * FROM Todo WHERE userId = ? ${where} ${orderBy}`)
         .all(userId) as TodoRow[]
     ).map((row) => toTodoDto(userId, row));
   },
@@ -168,14 +201,16 @@ export const todoService = {
       createdAt: now,
       updatedAt: now,
     };
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO Todo (
         id, userId, title, description, note, verificationReport, status, priority, timePriority, importancePriority, dueAt, completedAt, runId, createdAt, updatedAt
       )
       VALUES (
         @id, @userId, @title, @description, @note, @verificationReport, @status, @importancePriority, @timePriority, @importancePriority, @dueAt, @completedAt, NULL, @createdAt, @updatedAt
       )
-    `).run({ ...todo, userId });
+    `,
+    ).run({ ...todo, userId });
     return todo;
   },
 
@@ -185,21 +220,55 @@ export const todoService = {
     const next: TodoDto = {
       ...current,
       ...data,
-      dueAt: data.dueAt === undefined ? current.dueAt : data.dueAt?.toISOString() ?? null,
+      dueAt:
+        data.dueAt === undefined
+          ? current.dueAt
+          : (data.dueAt?.toISOString() ?? null),
       updatedAt: new Date().toISOString(),
     };
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE Todo SET title=@title, description=@description, priority=@importancePriority,
       timePriority=@timePriority, importancePriority=@importancePriority,
       dueAt=@dueAt, updatedAt=@updatedAt WHERE id=@id AND userId=@userId
-    `).run({ ...next, userId });
+    `,
+    ).run({ ...next, userId });
     return next;
   },
 
   async remove(userId: string, id: string) {
-    if (db.prepare("DELETE FROM Todo WHERE id = ? AND userId = ?").run(id, userId).changes === 0) {
-      throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
-    }
+    const todo = await this.get(userId, id);
+
+    // 使用事务确保 Todo 和文件清理的一致性
+    db.transaction(() => {
+      // 1. 收集所有关联的文件 ID
+      const noteFileIds = fileReferenceService.getFileIdsFromContent("Todo", id, "note");
+      const reportFileIds = fileReferenceService.getFileIdsFromContent(
+        "Todo",
+        id,
+        "verificationReport",
+      );
+      const allFileIds = [...new Set([...noteFileIds, ...reportFileIds])];
+
+      // 2. 删除 Todo 记录
+      const result = db.prepare("DELETE FROM Todo WHERE id = ? AND userId = ?").run(id, userId);
+      if (result.changes === 0) {
+        throw new AppError("TODO_NOT_FOUND", "Todo 不存在", 404);
+      }
+
+      // 3. 清理孤立文件（不在事务内部，避免事务被文件系统错误打断）
+      for (const fileId of allFileIds) {
+        // 检查文件是否还被其他记录引用
+        if (!fileReferenceService.isFileReferenced(userId, fileId)) {
+          // 异步清理孤立文件，不阻塞 Todo 删除
+          Promise.resolve().then(() => {
+            noteFileService.remove(userId, fileId).catch(() => {
+              // 忽略清理失败的错误
+            });
+          });
+        }
+      }
+    })();
   },
 
   async setNote(userId: string, id: string, input: unknown) {
@@ -207,7 +276,9 @@ export const todoService = {
     const data = todoNoteSchema.parse(input);
     const note = serializeRichContent(userId, data.note);
     const updatedAt = new Date().toISOString();
-    db.prepare("UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(note, updatedAt, id, userId);
+    db.prepare(
+      "UPDATE Todo SET note = ?, updatedAt = ? WHERE id = ? AND userId = ?",
+    ).run(note, updatedAt, id, userId);
     return this.get(userId, id);
   },
 
@@ -216,34 +287,57 @@ export const todoService = {
     const data = todoTransitionSchema.parse(input);
     if (current.status === data.status) return current;
     if (current.status === "PENDING" && data.status !== "RESOLVED") {
-      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "待处理 Todo 只能标记为已解决", 409);
+      throw new AppError(
+        "TODO_STATUS_TRANSITION_INVALID",
+        "待处理 Todo 只能标记为已解决",
+        409,
+      );
     }
-    if (current.status === "RESOLVED" && !["PENDING", "COMPLETED"].includes(data.status)) {
-      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "已解决 Todo 只能退回待处理或标记为已完成", 409);
+    if (
+      current.status === "RESOLVED" &&
+      !["PENDING", "COMPLETED"].includes(data.status)
+    ) {
+      throw new AppError(
+        "TODO_STATUS_TRANSITION_INVALID",
+        "已解决 Todo 只能退回待处理或标记为已完成",
+        409,
+      );
     }
-    if (current.status === "COMPLETED" && !["PENDING", "RESOLVED"].includes(data.status)) {
-      throw new AppError("TODO_STATUS_TRANSITION_INVALID", "已完成 Todo 只能退回待处理或已解决", 409);
+    if (
+      current.status === "COMPLETED" &&
+      !["PENDING", "RESOLVED"].includes(data.status)
+    ) {
+      throw new AppError(
+        "TODO_STATUS_TRANSITION_INVALID",
+        "已完成 Todo 只能退回待处理或已解决",
+        409,
+      );
     }
     if (data.status !== "COMPLETED" && data.verificationReport !== undefined) {
-      throw new AppError("TODO_VERIFICATION_REPORT_INVALID", "只有标记为已完成时才能提交验证报告", 409);
+      throw new AppError(
+        "TODO_VERIFICATION_REPORT_INVALID",
+        "只有标记为已完成时才能提交验证报告",
+        409,
+      );
     }
 
     const verificationReport =
-      data.status === "COMPLETED" ? serializeRichContent(userId, data.verificationReport ?? null) : null;
-    const completedAt = data.status === "COMPLETED" ? new Date().toISOString() : null;
+      data.status === "COMPLETED"
+        ? serializeRichContent(userId, data.verificationReport ?? null)
+        : null;
+    const completedAt =
+      data.status === "COMPLETED" ? new Date().toISOString() : null;
     const updatedAt = new Date().toISOString();
-    db.prepare("UPDATE Todo SET status = ?, verificationReport = ?, completedAt = ?, updatedAt = ? WHERE id = ? AND userId = ?").run(
-      data.status,
-      verificationReport,
-      completedAt,
-      updatedAt,
-      id,
-      userId,
-    );
+    db.prepare(
+      "UPDATE Todo SET status = ?, verificationReport = ?, completedAt = ?, updatedAt = ? WHERE id = ? AND userId = ?",
+    ).run(data.status, verificationReport, completedAt, updatedAt, id, userId);
     return {
       ...current,
       status: data.status,
-      verificationReport: data.status === "COMPLETED" ? parseRichContent(userId, verificationReport) : null,
+      verificationReport:
+        data.status === "COMPLETED"
+          ? parseRichContent(userId, verificationReport)
+          : null,
       completedAt,
       updatedAt,
     };

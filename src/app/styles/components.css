@@ -323,6 +323,82 @@
   text-underline-offset: 2px;
 }
 
+.rich-note-content .note-callout,
+.note-document-input .note-callout {
+  position: relative;
+  padding: 13px 14px 13px 44px;
+  background: #eef5ff;
+  border: 1px solid #c7d9ef;
+  border-radius: var(--radius-md);
+}
+
+.rich-note-content .note-callout::before,
+.note-document-input .note-callout::before {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: #43678c;
+  background: white;
+  border: 1px solid #c7d9ef;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  content: "i";
+}
+
+.rich-note-content .note-callout[data-callout-kind="warning"],
+.note-document-input .note-callout[data-callout-kind="warning"] {
+  background: #fff7e9;
+  border-color: #ecd1a2;
+}
+
+.rich-note-content .note-callout[data-callout-kind="warning"]::before,
+.note-document-input .note-callout[data-callout-kind="warning"]::before {
+  color: #8f6223;
+  border-color: #ecd1a2;
+  content: "!";
+}
+
+.rich-note-content .note-callout[data-callout-kind="success"],
+.note-document-input .note-callout[data-callout-kind="success"] {
+  background: #eef9f1;
+  border-color: #bcdcbf;
+}
+
+.rich-note-content .note-callout[data-callout-kind="success"]::before,
+.note-document-input .note-callout[data-callout-kind="success"]::before {
+  color: #2e7446;
+  border-color: #bcdcbf;
+  content: "+";
+}
+
+.rich-note-content .note-callout[data-callout-kind="danger"],
+.note-document-input .note-callout[data-callout-kind="danger"] {
+  background: #fff1ef;
+  border-color: #efc3bc;
+}
+
+.rich-note-content .note-callout[data-callout-kind="danger"]::before,
+.note-document-input .note-callout[data-callout-kind="danger"]::before {
+  color: #a34a40;
+  border-color: #efc3bc;
+  content: "!";
+}
+
+.rich-note-content .note-callout > :first-child,
+.note-document-input .note-callout > :first-child {
+  margin-top: 0;
+}
+
+.rich-note-content .note-callout > * + *,
+.note-document-input .note-callout > * + * {
+  margin-top: 8px;
+}
+
 .node-note-action {
   color: var(--muted);
 }
@@ -1053,7 +1129,9 @@
   position: absolute;
   inset: 0;
   background: rgb(255 255 255 / 52%);
-  pointer-events: none;
+  z-index: 1;
+  pointer-events: auto;
+  cursor: progress;
   content: "";
 }
 
@@ -1146,6 +1224,68 @@
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgb(216 75 62 / 14%);
+}
+
+.note-image-placeholder {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: min(340px, calc(100% - 48px));
+  gap: 10px;
+  padding: 12px;
+  background: rgb(255 255 255 / 96%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 28px rgb(44 33 24 / 12%);
+}
+
+.note-image-placeholder-preview {
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.note-image-placeholder-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.92);
+}
+
+.note-image-placeholder-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.note-image-placeholder-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-image-placeholder-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.note-image-placeholder-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.note-image-placeholder-error {
+  color: var(--danger);
+  font-size: 12px;
 }
 
 .note-editor-uploading {
@@ -1259,6 +1399,10 @@
   padding-left: 12px;
   color: var(--muted);
   border-left: 3px solid var(--line-strong);
+}
+
+.note-document-input .note-callout p {
+  margin: 0;
 }
 
 .note-document-input pre,

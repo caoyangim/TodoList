@@ -9,10 +9,12 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Info,
   Link2,
   List,
   ListOrdered,
   Minus,
+  ExternalLink,
   Quote,
   RemoveFormatting,
   Save,
@@ -51,6 +53,19 @@ type MarkdownShortcutAction =
   | { type: "blockquote" }
   | { type: "codeBlock" };
 
+type PendingImageUpload = {
+  errorMessage?: string;
+  id: string;
+  left: number;
+  file: File;
+  name: string;
+  order: number;
+  pos: number;
+  previewUrl: string;
+  status: "failed" | "processing" | "uploading";
+  top: number;
+};
+
 function normalizeLink(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -58,41 +73,28 @@ function normalizeLink(value: string) {
   return `https://${trimmed}`;
 }
 
-async function insertPastedImages(editor: Editor, items: DataTransferItem[]) {
-  const imageItems = items.filter((item) => item.type.startsWith("image/"));
-  if (imageItems.length === 0) return false;
+function preloadNoteImage(src: string) {
+  return new Promise<void>((resolve) => {
+    const image = new window.Image();
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = src;
+  });
+}
 
-  for (const item of imageItems) {
-    const file = item.getAsFile();
-    if (!file) continue;
-    const image = await uploadNoteImage(file);
-    editor
-      .chain()
-      .focus()
-      .setImage({
-        src: image.url,
-        alt: file.name || "粘贴图片",
-        title: file.name || "粘贴图片",
-      })
-      .run();
-  }
-
+function openSafeExternalLink(value: string | null | undefined) {
+  const normalized = value ? normalizeLink(value) : null;
+  if (!normalized) return false;
+  window.open(normalized, "_blank", "noopener,noreferrer");
   return true;
 }
 
-async function insertImageFiles(editor: Editor, files: File[]) {
-  for (const file of files) {
-    const image = await uploadNoteImage(file);
-    editor
-      .chain()
-      .focus()
-      .setImage({
-        src: image.url,
-        alt: file.name || "上传图片",
-        title: file.name || "上传图片",
-      })
-      .run();
-  }
+function insertPastedImages(_editor: Editor, items: DataTransferItem[]) {
+  const imageItems = items.filter((item) => item.type.startsWith("image/"));
+  if (imageItems.length === 0) return false;
+
+  const files = imageItems.map((item) => item.getAsFile()).filter((file): file is File => Boolean(file));
+  return files;
 }
 
 function getMarkdownShortcutAction(value: string): MarkdownShortcutAction | null {
@@ -163,6 +165,7 @@ export function NoteEditor({
 }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [pendingImageUploads, setPendingImageUploads] = useState<PendingImageUpload[]>([]);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
@@ -174,6 +177,60 @@ export function NoteEditor({
 
   function openImagePicker() {
     imageInputRef.current?.click();
+  }
+
+  function removePendingImageUploads(ids: string[]) {
+    setPendingImageUploads((current) => {
+      const idSet = new Set(ids);
+      for (const item of current) {
+        if (idSet.has(item.id)) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      }
+      return current.filter((item) => !idSet.has(item.id));
+    });
+  }
+
+  function updatePendingImageUploads(
+    ids: string[],
+    updater: (item: PendingImageUpload) => PendingImageUpload,
+  ) {
+    setPendingImageUploads((current) => {
+      const idSet = new Set(ids);
+      return current.map((item) => (idSet.has(item.id) ? updater(item) : item));
+    });
+  }
+
+  function createPendingImageUploads(
+    files: File[],
+    anchor: { left: number; pos: number; top: number },
+  ) {
+    return files.map((file, index) => ({
+      id: crypto.randomUUID(),
+      file,
+      left: anchor.left,
+      name: file.name || `图片 ${index + 1}`,
+      order: index,
+      pos: anchor.pos,
+      previewUrl: URL.createObjectURL(file),
+      status: "uploading" as const,
+      top: anchor.top + index * 108,
+    }));
+  }
+
+  function getUploadAnchor(currentEditor: Editor) {
+    const body = bodyRef.current;
+    if (!body) return null;
+
+    const position = currentEditor.state.selection.from;
+    const coords = currentEditor.view.coordsAtPos(position);
+    const bounds = body.getBoundingClientRect();
+
+    return {
+      left: coords.left - bounds.left + body.scrollLeft,
+      pos: position,
+      top: coords.top - bounds.top + body.scrollTop,
+    };
   }
 
   function openLinkEditor() {
@@ -196,15 +253,106 @@ export function NoteEditor({
   async function handleImageUpload(files: File[]) {
     const currentEditor = editorRef.current;
     if (!currentEditor || files.length === 0) return;
-    setUploadingImage(true);
+    const anchor = getUploadAnchor(currentEditor);
+    if (!anchor) return;
+
+    const placeholders = createPendingImageUploads(files, anchor);
     setUploadError("");
-    try {
-      await insertImageFiles(currentEditor, files);
-    } catch (error: unknown) {
-      setUploadError(getApiErrorMessage(error, "图片上传失败"));
-    } finally {
-      setUploadingImage(false);
+    setPendingImageUploads((current) => [...current, ...placeholders]);
+    void processImageUploadBatch(placeholders, "图片上传失败");
+  }
+
+  async function processImageUploadBatch(
+    placeholders: PendingImageUpload[],
+    fallbackMessage: string,
+  ) {
+    const currentEditor = editorRef.current;
+    if (!currentEditor || placeholders.length === 0) return;
+
+    setUploadingImage(true);
+    const results = await Promise.allSettled(
+      placeholders.map((item) => uploadNoteImage(item.file)),
+    );
+
+    const successItems: Array<{ item: PendingImageUpload; image: Awaited<ReturnType<typeof uploadNoteImage>> }> = [];
+    const failedIds: string[] = [];
+    let latestError = "";
+
+    results.forEach((result, index) => {
+      const item = placeholders[index];
+      if (!item) return;
+      if (result.status === "fulfilled") {
+        successItems.push({ item, image: result.value });
+        return;
+      }
+      failedIds.push(item.id);
+      latestError = getApiErrorMessage(result.reason, fallbackMessage);
+    });
+
+    if (successItems.length > 0) {
+      updatePendingImageUploads(
+        successItems.map(({ item }) => item.id),
+        (item) => ({
+          ...item,
+          status: "processing",
+        }),
+      );
+
+      await Promise.all(
+        successItems.map(({ image }) => preloadNoteImage(image.url)),
+      );
+
+      const groups = new Map<number, Array<{ item: PendingImageUpload; image: Awaited<ReturnType<typeof uploadNoteImage>> }>>();
+      for (const entry of successItems) {
+        const group = groups.get(entry.item.pos) ?? [];
+        group.push(entry);
+        groups.set(entry.item.pos, group);
+      }
+
+      for (const [pos, entries] of groups) {
+        const sortedEntries = [...entries].sort((a, b) => a.item.order - b.item.order);
+        currentEditor
+          .chain()
+          .focus()
+          .insertContentAt(
+            pos,
+            sortedEntries.map(({ item, image }) => ({
+              attrs: {
+                alt: item.name || "图片",
+                src: image.url,
+                title: item.name || "图片",
+              },
+              type: "image",
+            })),
+          )
+          .run();
+      }
+
+      removePendingImageUploads(successItems.map(({ item }) => item.id));
     }
+
+    if (failedIds.length > 0) {
+      setUploadError(latestError);
+      updatePendingImageUploads(failedIds, (item) => ({
+        ...item,
+        errorMessage: latestError,
+        status: "failed",
+      }));
+    }
+
+    setUploadingImage(false);
+  }
+
+  function retryPendingImageUpload(id: string) {
+    const target = pendingImageUploads.find((item) => item.id === id);
+    if (!target) return;
+    setUploadError("");
+    updatePendingImageUploads([id], (item) => ({
+      ...item,
+      errorMessage: "",
+      status: "uploading",
+    }));
+    void processImageUploadBatch([{ ...target, errorMessage: "", status: "uploading" }], "图片重试失败");
   }
 
   const editor = useEditor({
@@ -248,6 +396,17 @@ export function NoteEditor({
 
         return false;
       },
+      handleClick(_view, _pos, event) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return false;
+
+        const anchor = target.closest("a[href]");
+        if (!(anchor instanceof HTMLAnchorElement)) return false;
+        if (!(event.metaKey || event.ctrlKey)) return false;
+
+        event.preventDefault();
+        return openSafeExternalLink(anchor.getAttribute("href"));
+      },
       handleTextInput(_view, from, to, text) {
         if (text !== " ") return false;
         const currentEditor = editorRef.current;
@@ -272,17 +431,17 @@ export function NoteEditor({
 
         const currentEditor = editorRef.current;
         if (!currentEditor) return false;
+        const anchor = getUploadAnchor(currentEditor);
+        if (!anchor) return false;
 
         event.preventDefault();
-        setUploadingImage(true);
+        const files = insertPastedImages(currentEditor, items);
+        if (!files || files.length === 0) return true;
+
+        const placeholders = createPendingImageUploads(files, anchor);
         setUploadError("");
-        void insertPastedImages(currentEditor, items)
-          .catch((error: unknown) => {
-            setUploadError(getApiErrorMessage(error, "图片粘贴失败"));
-          })
-          .finally(() => {
-            setUploadingImage(false);
-          });
+        setPendingImageUploads((current) => [...current, ...placeholders]);
+        void processImageUploadBatch(placeholders, "图片粘贴失败");
         return true;
       },
     },
@@ -380,6 +539,13 @@ export function NoteEditor({
       description: "选择图片并插入",
       keywords: ["image", "photo", "图片", "插图"],
       action: () => runSlashCommand(() => openImagePicker()),
+    },
+    {
+      id: "callout",
+      label: "提示块",
+      description: "插入提示信息块",
+      keywords: ["callout", "info", "tip", "提示", "提示框"],
+      action: () => runSlashCommand(() => editor.chain().focus().toggleCallout().run()),
     },
   ].filter((item) => {
     const query = slashMenu.query.trim().toLowerCase();
@@ -575,6 +741,12 @@ export function NoteEditor({
       action: () => editor?.chain().focus().toggleCodeBlock().run(),
     },
     {
+      label: "提示块",
+      icon: <Info size={15} />,
+      active: editor?.isActive("callout"),
+      action: () => editor?.chain().focus().toggleCallout().run(),
+    },
+    {
       label: "链接",
       icon: <Link2 size={15} />,
       active: editor?.isActive("link"),
@@ -655,6 +827,45 @@ export function NoteEditor({
         aria-busy={uploadingImage}
         ref={bodyRef}
       >
+        {pendingImageUploads.map((item) => (
+          <div
+            className="note-image-placeholder"
+            key={item.id}
+            style={{ left: `${item.left}px`, top: `${item.top}px` }}
+          >
+            <div className="note-image-placeholder-preview">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt={item.name} src={item.previewUrl} />
+            </div>
+            <div className="note-image-placeholder-meta">
+              <span className="note-image-placeholder-title">{item.name}</span>
+              {item.status === "uploading" ? (
+                <span className="note-image-placeholder-status">
+                  <LoadingSpinner size={14} />
+                  正在上传图片...
+                </span>
+              ) : item.status === "processing" ? (
+                <span className="note-image-placeholder-status">
+                  <LoadingSpinner size={14} />
+                  正在插入图片...
+                </span>
+              ) : (
+                <div className="note-image-placeholder-actions">
+                  <span className="note-image-placeholder-error">
+                    {item.errorMessage || "图片上传失败"}
+                  </span>
+                  <button
+                    className="button"
+                    onClick={() => retryPendingImageUpload(item.id)}
+                    type="button"
+                  >
+                    重试上传
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
         {editor ? (
           <BubbleMenu
             className="note-bubble-menu"
@@ -662,9 +873,9 @@ export function NoteEditor({
             options={{ placement: "top" }}
             shouldShow={({ editor: currentEditor, from, to }) =>
               currentEditor.isEditable &&
-              from !== to &&
               !slashMenu &&
-              !uploadingImage
+              !uploadingImage &&
+              (from !== to || currentEditor.isActive("link"))
             }
           >
             <button
@@ -716,16 +927,29 @@ export function NoteEditor({
                 </button>
               </form>
             ) : (
-              <button
-                aria-label="链接"
-                aria-pressed={editor.isActive("link")}
-                className={`button icon-only${editor.isActive("link") ? " active" : ""}`}
-                onClick={openLinkEditor}
-                title="链接"
-                type="button"
-              >
-                <Link2 size={15} />
-              </button>
+              <>
+                <button
+                  aria-label="链接"
+                  aria-pressed={editor.isActive("link")}
+                  className={`button icon-only${editor.isActive("link") ? " active" : ""}`}
+                  onClick={openLinkEditor}
+                  title="链接"
+                  type="button"
+                >
+                  <Link2 size={15} />
+                </button>
+                {editor.isActive("link") ? (
+                  <button
+                    aria-label="打开链接"
+                    className="button icon-only"
+                    onClick={() => openSafeExternalLink(editor.getAttributes("link").href)}
+                    title="打开链接"
+                    type="button"
+                  >
+                    <ExternalLink size={15} />
+                  </button>
+                ) : null}
+              </>
             )}
             <button
               aria-label="清除格式"
@@ -773,7 +997,7 @@ export function NoteEditor({
       </div>
       <div className="note-editor-footer">
         <span className="note-editor-hint">
-          支持 / 命令、直接粘贴图片，以及 `#`、`-`、`1.`、`[]`、`&gt;`、``` 快捷输入
+          支持 / 命令、粘贴图片、Ctrl/Cmd + 点击链接打开，以及 `#`、`-`、`1.`、`[]`、`&gt;`、``` 快捷输入
         </span>
         {uploadError ? <span className="note-editor-error">{uploadError}</span> : null}
       </div>

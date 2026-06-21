@@ -4,6 +4,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
 import StarterKit from "@tiptap/starter-kit";
+import { NoteCallout } from "@/shared/note-callout-extension";
 
 export type NoteDocumentDto = JSONContent;
 
@@ -33,6 +34,7 @@ function createBaseNoteExtensions() {
         class: "note-image",
       },
     }),
+    NoteCallout,
     TaskList,
     TaskItem.configure({ nested: false }),
   ];

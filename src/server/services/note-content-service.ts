@@ -9,6 +9,7 @@ import {
 
 const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedTags: [
+    "aside",
     "p",
     "br",
     "h1",
@@ -31,6 +32,7 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   ],
   allowedAttributes: {
     a: ["href", "target", "rel"],
+    aside: ["class", "data-callout-kind", "data-note-callout"],
     img: ["src", "alt", "title", "class"],
   },
   allowedSchemes: ["http", "https", "mailto"],

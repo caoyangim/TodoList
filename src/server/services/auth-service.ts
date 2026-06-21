@@ -4,6 +4,8 @@ import path from "node:path";
 import { db } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
+import { fileReferenceService } from "@/server/services/file-reference-service";
+import { noteFileService } from "@/server/services/note-file-service";
 import {
   changePasswordSchema,
   createUserSchema,
@@ -88,7 +90,9 @@ function toAdminUser(row: UserRow): AdminUserDto {
 }
 
 function getUserById(id: string) {
-  return db.prepare("SELECT * FROM User WHERE id = ?").get(id) as UserRow | undefined;
+  return db.prepare("SELECT * FROM User WHERE id = ?").get(id) as
+    | UserRow
+    | undefined;
 }
 
 function assertAdmin(actor: CurrentUserDto) {
@@ -99,13 +103,21 @@ function assertAdmin(actor: CurrentUserDto) {
 
 function getDefaultTemplates(adminId: string) {
   const placeholders = defaultTemplateNames.map(() => "?").join(", ");
-  const templates = db.prepare(`
+  const templates = db
+    .prepare(
+      `
     SELECT id, name, description
     FROM SopTemplate
     WHERE userId = ? AND name IN (${placeholders})
-  `).all(adminId, ...defaultTemplateNames) as DefaultTemplateRow[];
-  const templatesByName = new Map(templates.map((template) => [template.name, template]));
-  const missingNames = defaultTemplateNames.filter((name) => !templatesByName.has(name));
+  `,
+    )
+    .all(adminId, ...defaultTemplateNames) as DefaultTemplateRow[];
+  const templatesByName = new Map(
+    templates.map((template) => [template.name, template]),
+  );
+  const missingNames = defaultTemplateNames.filter(
+    (name) => !templatesByName.has(name),
+  );
   if (missingNames.length > 0) {
     throw new AppError(
       "DEFAULT_TEMPLATE_NOT_FOUND",
@@ -113,7 +125,9 @@ function getDefaultTemplates(adminId: string) {
       409,
     );
   }
-  return defaultTemplateNames.map((name) => templatesByName.get(name) as DefaultTemplateRow);
+  return defaultTemplateNames.map(
+    (name) => templatesByName.get(name) as DefaultTemplateRow,
+  );
 }
 
 function copyDefaultTemplates(
@@ -141,7 +155,14 @@ function copyDefaultTemplates(
     const templateId = randomUUID();
     const nodes = selectNodes.all(template.id) as DefaultTemplateNodeRow[];
     const nodeIdMap = new Map(nodes.map((node) => [node.id, randomUUID()]));
-    insertTemplate.run(templateId, userId, template.name, template.description, now, now);
+    insertTemplate.run(
+      templateId,
+      userId,
+      template.name,
+      template.description,
+      now,
+      now,
+    );
     for (const node of nodes) {
       insertNode.run(
         nodeIdMap.get(node.id),
@@ -150,7 +171,7 @@ function copyDefaultTemplates(
         node.description,
         node.sortOrder,
         node.isRequired,
-        node.parentId ? nodeIdMap.get(node.parentId) ?? null : null,
+        node.parentId ? (nodeIdMap.get(node.parentId) ?? null) : null,
         now,
         now,
       );
@@ -166,7 +187,11 @@ function checkLoginLimit(key: string) {
     return;
   }
   if (attempt.count >= maxLoginAttempts) {
-    throw new AppError("LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后再试", 429);
+    throw new AppError(
+      "LOGIN_RATE_LIMITED",
+      "登录尝试过于频繁，请稍后再试",
+      429,
+    );
   }
 }
 
@@ -189,7 +214,10 @@ function stageAccountFiles(userId: string) {
     .all(userId) as AttachmentRow[];
   const paths = [
     ...noteFiles.map((file) =>
-      path.join(noteFileDirectory, file.extension ? `${file.id}.${file.extension}` : file.id),
+      path.join(
+        noteFileDirectory,
+        file.extension ? `${file.id}.${file.extension}` : file.id,
+      ),
     ),
     ...noteImages.map((image) =>
       path.join(noteImageDirectory, `${image.id}.${image.extension}`),
@@ -238,10 +266,13 @@ export const authService = {
     const attemptKey = `${clientKey}:${data.username}`;
     checkLoginLimit(attemptKey);
 
-    const user = db.prepare("SELECT * FROM User WHERE username = ?").get(data.username) as
-      | UserRow
-      | undefined;
-    const passwordMatches = verifyPassword(data.password, user?.passwordHash ?? dummyPasswordHash);
+    const user = db
+      .prepare("SELECT * FROM User WHERE username = ?")
+      .get(data.username) as UserRow | undefined;
+    const passwordMatches = verifyPassword(
+      data.password,
+      user?.passwordHash ?? dummyPasswordHash,
+    );
     if (!user || !user.isActive || !passwordMatches) {
       recordLoginFailure(attemptKey);
       throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确", 401);
@@ -250,10 +281,12 @@ export const authService = {
     loginAttempts.delete(attemptKey);
     const token = randomBytes(32).toString("base64url");
     const now = new Date();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO Session (id, userId, tokenHash, expiresAt, lastUsedAt, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
+    `,
+    ).run(
       randomUUID(),
       user.id,
       hashToken(token),
@@ -267,22 +300,32 @@ export const authService = {
   authenticate(token: string | undefined) {
     if (!token) return null;
     const now = new Date();
-    const row = db.prepare(`
+    const row = db
+      .prepare(
+        `
       SELECT u.*, s.id AS sessionId, s.expiresAt, s.lastUsedAt
       FROM Session s
       INNER JOIN User u ON u.id = s.userId
       WHERE s.tokenHash = ?
-    `).get(hashToken(token)) as
+    `,
+      )
+      .get(hashToken(token)) as
       | (UserRow & { sessionId: string; expiresAt: string; lastUsedAt: string })
       | undefined;
 
     if (!row || !row.isActive || new Date(row.expiresAt) <= now) {
-      if (row) db.prepare("DELETE FROM Session WHERE id = ?").run(row.sessionId);
+      if (row)
+        db.prepare("DELETE FROM Session WHERE id = ?").run(row.sessionId);
       return null;
     }
 
-    if (now.getTime() - new Date(row.lastUsedAt).getTime() >= sessionRefreshIntervalMs) {
-      db.prepare("UPDATE Session SET expiresAt = ?, lastUsedAt = ? WHERE id = ?").run(
+    if (
+      now.getTime() - new Date(row.lastUsedAt).getTime() >=
+      sessionRefreshIntervalMs
+    ) {
+      db.prepare(
+        "UPDATE Session SET expiresAt = ?, lastUsedAt = ? WHERE id = ?",
+      ).run(
         new Date(now.getTime() + sessionDurationMs).toISOString(),
         now.toISOString(),
         row.sessionId,
@@ -292,23 +335,29 @@ export const authService = {
   },
 
   logout(token: string | undefined) {
-    if (token) db.prepare("DELETE FROM Session WHERE tokenHash = ?").run(hashToken(token));
+    if (token)
+      db.prepare("DELETE FROM Session WHERE tokenHash = ?").run(
+        hashToken(token),
+      );
   },
 
   changePassword(userId: string, input: unknown) {
     const data = changePasswordSchema.parse(input);
     const user = getUserById(userId);
-    if (!user || !user.isActive) throw new AppError("AUTH_REQUIRED", "请先登录", 401);
+    if (!user || !user.isActive)
+      throw new AppError("AUTH_REQUIRED", "请先登录", 401);
     if (!verifyPassword(data.currentPassword, user.passwordHash)) {
       throw new AppError("CURRENT_PASSWORD_INVALID", "当前密码不正确", 400);
     }
     const now = new Date().toISOString();
     db.transaction(() => {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE User
         SET passwordHash = ?, mustChangePassword = 0, updatedAt = ?
         WHERE id = ?
-      `).run(hashPassword(data.newPassword), now, userId);
+      `,
+      ).run(hashPassword(data.newPassword), now, userId);
       db.prepare("DELETE FROM Session WHERE userId = ?").run(userId);
     })();
   },
@@ -328,15 +377,20 @@ export const authService = {
     try {
       db.transaction(() => {
         const defaultTemplates = getDefaultTemplates(actor.id);
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO User (
             id, username, passwordHash, role, isActive, mustChangePassword, createdAt, updatedAt
           ) VALUES (?, ?, ?, 'USER', 1, 1, ?, ?)
-        `).run(id, data.username, hashPassword(data.password), now, now);
+        `,
+        ).run(id, data.username, hashPassword(data.password), now, now);
         copyDefaultTemplates(defaultTemplates, id, now);
       })();
     } catch (error) {
-      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      if (
+        error instanceof Error &&
+        error.message.includes("UNIQUE constraint failed")
+      ) {
         throw new AppError("USERNAME_EXISTS", "用户名已存在", 409);
       }
       throw error;
@@ -356,18 +410,18 @@ export const authService = {
     const now = new Date().toISOString();
     db.transaction(() => {
       if (data.password !== undefined) {
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE User
           SET passwordHash = ?, mustChangePassword = 1, updatedAt = ?
           WHERE id = ?
-        `).run(hashPassword(data.password), now, targetId);
+        `,
+        ).run(hashPassword(data.password), now, targetId);
       }
       if (data.isActive !== undefined) {
-        db.prepare("UPDATE User SET isActive = ?, updatedAt = ? WHERE id = ?").run(
-          data.isActive ? 1 : 0,
-          now,
-          targetId,
-        );
+        db.prepare(
+          "UPDATE User SET isActive = ?, updatedAt = ? WHERE id = ?",
+        ).run(data.isActive ? 1 : 0, now, targetId);
       }
       if (data.password !== undefined || data.isActive === false) {
         db.prepare("DELETE FROM Session WHERE userId = ?").run(targetId);
@@ -390,6 +444,12 @@ export const authService = {
 
     const stagedFiles = stageAccountFiles(user.id);
     try {
+      // 1. 收集所有孤立文件（用户所有数据删除后将变成孤立）
+      const orphanedFileIds = fileReferenceService.getOrphanedFileIds(user.id);
+      const allUserFileIds = (
+        db.prepare("SELECT id FROM NoteFile WHERE userId = ?").all(user.id) as { id: string }[]
+      ).map((row) => row.id);
+
       db.transaction(() => {
         db.prepare("DELETE FROM SopRun WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM SopTemplate WHERE userId = ?").run(user.id);
@@ -403,6 +463,16 @@ export const authService = {
           throw new AppError("AUTH_REQUIRED", "请先登录", 401);
         }
       })();
+
+      // 2. 删除用户的所有文件（注销后所有文件都变成孤立）
+      for (const fileId of allUserFileIds) {
+        // 异步清理，不阻塞用户注销
+        Promise.resolve().then(() => {
+          noteFileService.remove(user.id, fileId).catch(() => {
+            // 忽略清理失败的错误
+          });
+        });
+      }
     } catch (error) {
       restoreStagedFiles(stagedFiles);
       throw error;

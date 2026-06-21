@@ -240,6 +240,18 @@ describe("Note service", () => {
               title: "回归截图",
             },
           },
+          {
+            type: "callout",
+            attrs: {
+              kind: "warning",
+            },
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "上线前请再次检查环境变量" }],
+              },
+            ],
+          },
         ],
       },
     });
@@ -256,6 +268,9 @@ describe("Note service", () => {
     expect(note.contentHtml).toContain(">文档</a>");
     expect(note.contentHtml).toContain('src="/api/note-images/test-image"');
     expect(note.contentHtml).toContain('alt="回归截图"');
+    expect(note.contentHtml).toContain('class="note-callout"');
+    expect(note.contentHtml).toContain('data-callout-kind="warning"');
+    expect(note.contentHtml).toContain("上线前请再次检查环境变量");
     expect(note.excerpt).toContain("发布记录");
 
     const summaries = await noteService.list();
