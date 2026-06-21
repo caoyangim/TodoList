@@ -1,21 +1,29 @@
 :root {
-  --background: #fbfbfa;
+  --background: #f6f3ef;
   --surface: #ffffff;
-  --surface-muted: #f5f5f4;
-  --sidebar: #f2f3f2;
+  --surface-muted: #f7f4f1;
+  --sidebar: #f4f0eb;
   --text: #24211f;
-  --muted: #706f6c;
+  --muted: #6f6861;
   --text-muted: var(--muted);
-  --line: #e2e2df;
-  --line-strong: #d2d2cd;
+  --line: #e5ddd5;
+  --line-strong: #d6cbc1;
   --accent: #d84b3e;
   --accent-hover: #bf3d32;
   --accent-soft: #fff1ef;
   --success: #2f8f5b;
   --warning: #c47f17;
   --danger: #c5362b;
+  --panel-goal: linear-gradient(180deg, #fff7e9 0%, #f8e8c9 100%);
+  --panel-today: linear-gradient(180deg, #f8f5ff 0%, #ece6fb 100%);
+  --panel-schedule: linear-gradient(180deg, #fffefd 0%, #f4eee6 100%);
+  --panel-note: linear-gradient(180deg, #fff6c6 0%, #f5df8d 100%);
+  --panel-urgent: #ffd8b2;
+  --panel-important: #f0d8f6;
+  --panel-both: #dbe8ff;
+  --panel-balanced: #ebe8e2;
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --shadow-soft: 0 1px 2px rgb(32 24 18 / 4%);
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --shadow-soft: 0 10px 30px rgb(57 38 20 / 5%);
 }

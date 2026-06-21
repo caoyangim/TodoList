@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckSquare, ClipboardList, FileText, KeyRound, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
+import { CheckSquare, ClipboardList, FileText, KeyRound, LayoutDashboard, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { CurrentUserDto } from "@/shared/types/models";
 import { useSidebarStore } from "@/shared/stores/sidebar-store";
 
 const links = [
+  { href: "/overview", label: "概览", icon: LayoutDashboard },
   { href: "/todos", label: "Todo", icon: CheckSquare },
   { href: "/notes", label: "Note", icon: FileText },
   { href: "/runs", label: "SOP 执行", icon: ListChecks },
@@ -39,7 +40,10 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
         <div className="brand">
           <span className="brand-mark"><CheckSquare size={18} /></span>
-          <span className="brand-text">TodoFlow</span>
+          <span className="brand-text">
+            <span className="brand-title">TodoFlow</span>
+            <span className="brand-subtitle">Daily Workspace</span>
+          </span>
           <button
             aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
             className="sidebar-toggle"
