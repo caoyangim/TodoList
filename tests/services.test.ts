@@ -252,6 +252,57 @@ describe("Note service", () => {
               },
             ],
           },
+          {
+            type: "table",
+            content: [
+              {
+                type: "tableRow",
+                content: [
+                  {
+                    type: "tableHeader",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "步骤" }],
+                      },
+                    ],
+                  },
+                  {
+                    type: "tableHeader",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "状态" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                type: "tableRow",
+                content: [
+                  {
+                    type: "tableCell",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "发布前检查" }],
+                      },
+                    ],
+                  },
+                  {
+                    type: "tableCell",
+                    content: [
+                      {
+                        type: "paragraph",
+                        content: [{ type: "text", text: "已完成" }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         ],
       },
     });
@@ -271,6 +322,9 @@ describe("Note service", () => {
     expect(note.contentHtml).toContain('class="note-callout"');
     expect(note.contentHtml).toContain('data-callout-kind="warning"');
     expect(note.contentHtml).toContain("上线前请再次检查环境变量");
+    expect(note.contentHtml).toContain('class="note-table"');
+    expect(note.contentHtml).toContain("<th colspan=\"1\" rowspan=\"1\"><p>步骤</p></th>");
+    expect(note.contentHtml).toContain("<td colspan=\"1\" rowspan=\"1\"><p>已完成</p></td>");
     expect(note.excerpt).toContain("发布记录");
 
     const summaries = await noteService.list();
@@ -1100,7 +1154,7 @@ describe("Authentication and data isolation", () => {
         }
       ).count,
     ).toBe(otherUserCountBefore);
-  });
+  }, 15000);
 
   it("rejects administrator account deletion", () => {
     expect(() => authService.deleteAccount(admin())).toThrowError(

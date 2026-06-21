@@ -5,7 +5,9 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Bold,
+  Columns3,
   Code,
+  Grid2x2,
   Heading1,
   Heading2,
   Heading3,
@@ -21,6 +23,7 @@ import {
   SquareCheck,
   Trash2,
   Underline as UnderlineIcon,
+  Rows3,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LoadingSpinner } from "@/components/loading";
@@ -177,6 +180,10 @@ export function NoteEditor({
 
   function openImagePicker() {
     imageInputRef.current?.click();
+  }
+
+  function insertBasicTable() {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }
 
   function removePendingImageUploads(ids: string[]) {
@@ -547,6 +554,13 @@ export function NoteEditor({
       keywords: ["callout", "info", "tip", "提示", "提示框"],
       action: () => runSlashCommand(() => editor.chain().focus().toggleCallout().run()),
     },
+    {
+      id: "table",
+      label: "表格",
+      description: "插入基础表格",
+      keywords: ["table", "grid", "表格", "单元格"],
+      action: () => runSlashCommand(() => insertBasicTable()),
+    },
   ].filter((item) => {
     const query = slashMenu.query.trim().toLowerCase();
     if (!query) return true;
@@ -747,6 +761,12 @@ export function NoteEditor({
       action: () => editor?.chain().focus().toggleCallout().run(),
     },
     {
+      label: "表格",
+      icon: <Grid2x2 size={15} />,
+      active: editor?.isActive("table"),
+      action: insertBasicTable,
+    },
+    {
       label: "链接",
       icon: <Link2 size={15} />,
       active: editor?.isActive("link"),
@@ -821,6 +841,60 @@ export function NoteEditor({
           </button>
         ))}
       </div>
+      {editor?.isActive("table") ? (
+        <div className="note-table-toolbar" role="toolbar" aria-label="表格操作">
+          <button
+            className="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+            type="button"
+          >
+            <Rows3 size={15} />
+            新增行
+          </button>
+          <button
+            className="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+            type="button"
+          >
+            <Columns3 size={15} />
+            新增列
+          </button>
+          <button
+            className="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+            type="button"
+          >
+            切换表头
+          </button>
+          <button
+            className="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().deleteRow().run()}
+            type="button"
+          >
+            删除当前行
+          </button>
+          <button
+            className="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+            type="button"
+          >
+            删除当前列
+          </button>
+          <button
+            className="button danger"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => editor.chain().focus().deleteTable().run()}
+            type="button"
+          >
+            删除表格
+          </button>
+        </div>
+      ) : null}
 
       <div
         className={`note-editor-body${uploadingImage ? " uploading" : ""}`}

@@ -10,6 +10,7 @@ import {
 const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedTags: [
     "aside",
+    "div",
     "p",
     "br",
     "h1",
@@ -24,6 +25,14 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
     "ul",
     "ol",
     "li",
+    "table",
+    "tbody",
+    "thead",
+    "tr",
+    "th",
+    "td",
+    "colgroup",
+    "col",
     "blockquote",
     "code",
     "pre",
@@ -33,7 +42,12 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedAttributes: {
     a: ["href", "target", "rel"],
     aside: ["class", "data-callout-kind", "data-note-callout"],
+    div: ["class"],
     img: ["src", "alt", "title", "class"],
+    table: ["class"],
+    th: ["colspan", "rowspan", "colwidth"],
+    td: ["colspan", "rowspan", "colwidth"],
+    col: ["span"],
   },
   allowedSchemes: ["http", "https", "mailto"],
   allowProtocolRelative: false,
@@ -46,7 +60,12 @@ const sanitizeOptions: sanitizeHtml.IOptions = {
         rel: "noreferrer noopener",
       },
     }),
-    div: "p",
+    div: (_tagName, attribs): sanitizeHtml.Tag => {
+      if (attribs.class === "tableWrapper") {
+        return { tagName: "div", attribs: { class: "tableWrapper" } };
+      }
+      return { tagName: "p", attribs: {} };
+    },
   },
 };
 
