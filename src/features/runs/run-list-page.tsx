@@ -169,7 +169,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
                 </span>
                 <span>更新于 {formatUpdatedAt(run.updatedAt)}</span>
               </div>
-              <div className="progress-track" style={{ marginTop: 12 }}>
+              <div className="progress-track progress-track-spaced">
                 <div
                   className={`progress-bar ${progressClass(run)}`}
                   style={{ width: `${run.progressPercent}%` }}
@@ -241,7 +241,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
       </header>
 
       {error && !createOpen && !pendingDelete ? (
-        <div className="error-banner" style={{ marginBottom: 16 }}>
+        <div className="error-banner page-section">
           {error}
         </div>
       ) : null}
@@ -290,7 +290,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
                 <div className="card-header">
                   <div>
                     <ClipboardList size={20} color="var(--accent)" />
-                    <h2 className="item-title" style={{ marginTop: 12 }}>
+                    <h2 className="item-title card-item-title">
                       {template.name}
                     </h2>
                   </div>
@@ -299,7 +299,7 @@ export function RunListPage({ initialTemplateId }: { initialTemplateId: string |
                 {template.description ? (
                   <p className="item-description">{template.description}</p>
                 ) : null}
-                <div className="item-meta" style={{ marginTop: 18 }}>
+                <div className="item-meta card-item-meta">
                   <span>{activeCount} 条进行中</span>
                   <span>{archivedCount} 条已归档</span>
                 </div>

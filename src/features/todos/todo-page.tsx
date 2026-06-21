@@ -234,7 +234,7 @@ export function TodoPage() {
         </button>
       </header>
 
-      <div className="tabs" style={{ marginBottom: 14 }}>
+      <div className="tabs page-section">
         {(["pending", "resolved", "completed", "all"] as StatusFilter[]).map((value) => (
           <button
             className={`tab ${status === value ? "active" : ""}`}
@@ -253,7 +253,7 @@ export function TodoPage() {
         ))}
       </div>
 
-      {error && !editing ? <div className="error-banner" style={{ marginBottom: 14 }}>{error}</div> : null}
+      {error && !editing ? <div className="error-banner page-section">{error}</div> : null}
       {loading ? (
         <LoadingState label="正在加载 Todo..." />
       ) : todos.length === 0 ? (
@@ -396,7 +396,7 @@ export function TodoPage() {
                     <div className="node-note todo-note">
                       <ShieldCheck size={14} />
                       <div className="node-note-content">
-                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>验证报告</div>
+                        <div className="note-label">验证报告</div>
                         {todo.verificationReport.html ? (
                           <div
                             className="rich-note-content"
@@ -440,7 +440,12 @@ export function TodoPage() {
                     <span className={`badge ${todo.importancePriority.toLowerCase()}`}>
                       重要优先级：{priorityText[todo.importancePriority]}
                     </span>
-                    {due ? <span style={{ color: due.overdue && todo.status !== "COMPLETED" ? "var(--danger)" : undefined }}>{due.overdue && todo.status !== "COMPLETED" ? "已逾期 · " : ""}{due.label}</span> : null}
+                    {due ? (
+                      <span className={due.overdue && todo.status !== "COMPLETED" ? "danger-text" : undefined}>
+                        {due.overdue && todo.status !== "COMPLETED" ? "已逾期 · " : ""}
+                        {due.label}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <div className="item-actions">
@@ -564,7 +569,7 @@ export function TodoPage() {
             {error ? <div className="error-banner">{error}</div> : null}
             <div className="field">
               <label>{verifyTodo.title}</label>
-              <p style={{ margin: "4px 0 0", color: "var(--text-muted)", fontSize: 13 }}>
+              <p className="modal-hint">
                 可以补充可选的验证报告，也可以直接完成验证。
               </p>
             </div>

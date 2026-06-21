@@ -85,17 +85,7 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
     <>
       <header className="page-header">
         <div>
-          <Link
-            href="/templates"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              color: "var(--muted)",
-              fontSize: 13,
-              marginBottom: 12,
-            }}
-          >
+          <Link className="back-link" href="/templates">
             <ArrowLeft size={15} /> 返回模板列表
           </Link>
           <h1 className="page-title">{templateId ? "编辑 SOP 模板" : "新建 SOP 模板"}</h1>

@@ -116,6 +116,19 @@ db.exec(`
     createdAt TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS Note (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    contentMarkdown TEXT NOT NULL,
+    contentHtml TEXT NOT NULL,
+    excerpt TEXT NOT NULL,
+    deletedAt TEXT,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS SopRunNode (
     id TEXT PRIMARY KEY,
     runId TEXT NOT NULL,
@@ -180,10 +193,16 @@ ensureColumn("SopRun", "archivedAt", "TEXT");
 ensureColumn("SopRun", "title", "TEXT");
 ensureColumn("SopTemplateNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("SopRunNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("Note", "contentHtml", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("Note", "excerpt", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("Note", "deletedAt", "TEXT");
+ensureColumn("Note", "content", "TEXT NOT NULL DEFAULT '{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}'");
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS SopRun_archivedAt_idx ON SopRun(archivedAt);
   CREATE UNIQUE INDEX IF NOT EXISTS Todo_runId_key ON Todo(runId) WHERE runId IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS Note_userId_updatedAt_idx ON Note(userId, updatedAt);
+  CREATE INDEX IF NOT EXISTS Note_deletedAt_idx ON Note(deletedAt);
 `);
 
 function migrateSopRunVersionConstraint() {
@@ -388,6 +407,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS SopRun_userId_idx ON SopRun(userId);
   CREATE INDEX IF NOT EXISTS NoteImage_userId_idx ON NoteImage(userId);
   CREATE INDEX IF NOT EXISTS NoteFile_userId_idx ON NoteFile(userId);
+  CREATE INDEX IF NOT EXISTS Note_userId_idx ON Note(userId);
 `);
 
 if (process.env.NODE_ENV !== "production") globalForDb.todoFlowDb = db;

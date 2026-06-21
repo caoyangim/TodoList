@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AppMain } from "@/components/app-main";
 import { AppNav } from "@/components/app-nav";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/server/auth/request";
@@ -13,9 +14,7 @@ export default async function ProtectedLayout({
   return (
     <AppShell>
       <AppNav user={user} />
-      <main className="main-content">
-        <div className="content-wrap">{children}</div>
-      </main>
+      <AppMain>{children}</AppMain>
     </AppShell>
   );
 }

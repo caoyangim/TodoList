@@ -15,7 +15,7 @@ export function EmptyState({
         <Inbox size={34} strokeWidth={1.5} />
         <strong>{title}</strong>
         <div>{description}</div>
-        {action ? <div style={{ marginTop: 18 }}>{action}</div> : null}
+        {action ? <div className="empty-state-action">{action}</div> : null}
       </div>
     </div>
   );

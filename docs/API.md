@@ -154,7 +154,64 @@ PATCH /api/todos/:id/note
 - Todo DTO 的 `run` 字段为绑定执行摘要或 `null`，包含执行 ID、标题、状态、进度、
   节点计数及归档时间。
 
-## 4. SOP 模板
+## 4. Note
+
+Note 是独立的文档资源，正文以结构化 `content` JSON 作为主存储。
+服务端会生成安全的 `contentHtml` 和列表摘要 `excerpt`。
+
+```text
+GET    /api/notes
+POST   /api/notes
+GET    /api/notes/:id
+PATCH  /api/notes/:id
+DELETE /api/notes/:id
+```
+
+创建：
+
+```json
+{
+  "title": "发布记录",
+  "content": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [{ "type": "text", "text": "发布记录" }]
+      }
+    ]
+  }
+}
+```
+
+`title` 可省略或为空，服务端会从正文生成标题；正文为空时标题为
+`未命名 Note`。文档可见文字最多 100000 个字符，`title` 最长 100 个字符。
+
+Note DTO：
+
+```json
+{
+  "id": "note-id",
+  "title": "发布记录",
+  "content": {
+    "type": "doc",
+    "content": []
+  },
+  "contentHtml": "<h1>发布记录</h1>",
+  "excerpt": "发布记录",
+  "createdAt": "2026-06-21T00:00:00.000Z",
+  "updatedAt": "2026-06-21T00:00:00.000Z"
+}
+```
+
+列表接口返回 `NoteSummaryDto[]`，不包含 `content` 和 `contentHtml`。
+删除成功返回 `204`。跨用户访问统一返回 `404 NOTE_NOT_FOUND`。
+
+当前文档编辑支持标题、段落、无序列表、有序列表、任务列表、引用、代码块、
+粗体、下划线和链接。链接仅允许 `http`、`https` 和 `mailto` 协议，并会经过
+服务端白名单清洗。
+
+## 5. SOP 模板
 
 ```text
 GET    /api/templates
@@ -197,7 +254,7 @@ DELETE /api/templates/:id
 
 - `TEMPLATE_IN_USE`：模板已有执行记录，不能删除。
 
-## 5. SOP 执行
+## 6. SOP 执行
 
 ### 查询
 

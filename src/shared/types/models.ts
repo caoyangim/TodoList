@@ -1,3 +1,5 @@
+import { NoteDocumentDto } from "@/shared/note-document";
+
 export type TodoPriority = "LOW" | "MEDIUM" | "HIGH";
 export type TodoStatus = "PENDING" | "RESOLVED" | "COMPLETED";
 
@@ -64,6 +66,19 @@ export type NoteFileDto = {
 export type NoteContentDto = {
   html: string;
   files: NoteFileDto[];
+};
+
+export type NoteSummaryDto = {
+  id: string;
+  title: string;
+  excerpt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NoteDto = NoteSummaryDto & {
+  content: NoteDocumentDto;
+  contentHtml: string;
 };
 
 export type UserRole = "ADMIN" | "USER";

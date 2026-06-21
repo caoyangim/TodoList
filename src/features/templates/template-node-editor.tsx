@@ -183,9 +183,9 @@ export function TemplateNodeEditor({
 
   return (
     <div>
-      <div className="page-header" style={{ marginBottom: 12, alignItems: "center" }}>
+      <div className="page-header compact-page-header">
         <div>
-          <h2 style={{ margin: 0, fontSize: 18 }}>执行节点</h2>
+          <h2 className="section-title">执行节点</h2>
           <p className="page-subtitle">可选节点不阻止整个 SOP 完成。</p>
         </div>
         <button

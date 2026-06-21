@@ -394,6 +394,7 @@ export const authService = {
         db.prepare("DELETE FROM SopRun WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM SopTemplate WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM Todo WHERE userId = ?").run(user.id);
+        db.prepare("DELETE FROM Note WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM NoteFile WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM NoteImage WHERE userId = ?").run(user.id);
         db.prepare("DELETE FROM Session WHERE userId = ?").run(user.id);

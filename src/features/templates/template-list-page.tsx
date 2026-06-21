@@ -54,7 +54,7 @@ export function TemplateListPage() {
         <Link className="button primary" href="/templates/new"><Plus size={17} /> 新建模板</Link>
       </header>
 
-      {error ? <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div> : null}
+      {error ? <div className="error-banner page-section">{error}</div> : null}
       {loading ? (
         <LoadingState label="正在加载模板..." />
       ) : templates.length === 0 ? (
@@ -70,7 +70,7 @@ export function TemplateListPage() {
               <div className="card-header">
                 <div>
                   <ClipboardList size={20} color="var(--accent)" />
-                  <h2 className="item-title" style={{ marginTop: 12 }}>{template.name}</h2>
+                  <h2 className="item-title card-item-title">{template.name}</h2>
                 </div>
                 <button
                   aria-label="删除模板"
@@ -83,11 +83,11 @@ export function TemplateListPage() {
                 </button>
               </div>
               {template.description ? <p className="item-description">{template.description}</p> : null}
-              <div className="item-meta" style={{ marginTop: 18 }}>
+              <div className="item-meta card-item-meta">
                 <span>{template.nodeCount} 个节点</span>
                 <span>更新于 {new Date(template.updatedAt).toLocaleDateString("zh-CN")}</span>
               </div>
-              <Link className="button" href={`/templates/${template.id}`} style={{ width: "100%", marginTop: 16 }}>
+              <Link className="button full-width card-action" href={`/templates/${template.id}`}>
                 编辑模板 <ChevronRight size={15} />
               </Link>
             </article>

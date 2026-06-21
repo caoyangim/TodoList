@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { NoteDocumentDto } from "@/shared/note-document";
 
 const testDir = path.resolve(process.cwd(), "data-test");
 const testDb = path.join(testDir, "todoflow-test.db");
@@ -13,6 +14,7 @@ process.env.TODOFLOW_ADMIN_PASSWORD = "todoflow-test-password";
 let rawTodoService: typeof import("@/server/services/todo-service").todoService;
 let rawTemplateService: typeof import("@/server/services/template-service").templateService;
 let rawRunService: typeof import("@/server/services/run-service").runService;
+let rawNoteService: typeof import("@/server/services/note-service").noteService;
 let rawNoteFileService: typeof import("@/server/services/note-file-service").noteFileService;
 let rawNoteImageService: typeof import("@/server/services/note-image-service").noteImageService;
 let authService: typeof import("@/server/services/auth-service").authService;
@@ -51,11 +53,31 @@ const runService = {
   remove: (id: string) => rawRunService.remove(testUserId, id),
 };
 
+const noteService = {
+  list: () => rawNoteService.list(testUserId),
+  get: (id: string) => rawNoteService.get(testUserId, id),
+  create: (input: unknown) => rawNoteService.create(testUserId, input),
+  update: (id: string, input: unknown) => rawNoteService.update(testUserId, id, input),
+  remove: (id: string) => rawNoteService.remove(testUserId, id),
+};
+
 const noteFileService = {
   create: (file: File) => rawNoteFileService.create(testUserId, file),
   get: (id: string) => rawNoteFileService.get(testUserId, id),
   remove: (id: string) => rawNoteFileService.remove(testUserId, id),
 };
+
+function doc(text: string): NoteDocumentDto {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text }],
+      },
+    ],
+  };
+}
 
 beforeAll(async () => {
   fs.rmSync(testDir, { recursive: true, force: true });
@@ -63,13 +85,14 @@ beforeAll(async () => {
   ({ todoService: rawTodoService } = await import("@/server/services/todo-service"));
   ({ templateService: rawTemplateService } = await import("@/server/services/template-service"));
   ({ runService: rawRunService } = await import("@/server/services/run-service"));
+  ({ noteService: rawNoteService } = await import("@/server/services/note-service"));
   ({ noteFileService: rawNoteFileService } = await import("@/server/services/note-file-service"));
   ({ noteImageService: rawNoteImageService } = await import("@/server/services/note-image-service"));
   ({ authService } = await import("@/server/services/auth-service"));
   testUserId = (
     db.prepare("SELECT id FROM User WHERE username = ?").get("admin") as { id: string }
   ).id;
-});
+}, 60000);
 
 afterAll(() => {
   db.close();
@@ -169,6 +192,140 @@ describe("Todo service", () => {
       note: { html: "<p><br></p>", fileIds: [] },
     });
     expect(cleared.note).toBeNull();
+  });
+});
+
+describe("Note service", () => {
+  it("creates, lists and reads document notes with safe HTML", async () => {
+    const note = await noteService.create({
+      title: "发布记录",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "发布记录" }],
+          },
+          {
+            type: "bulletList",
+            content: [
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [{ type: "text", text: "已完成回归" }],
+                  },
+                ],
+              },
+              {
+                type: "listItem",
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      { type: "text", text: "文档", marks: [{ type: "link", attrs: { href: "https://example.com" } }] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: "image",
+            attrs: {
+              src: "/api/note-images/test-image",
+              alt: "回归截图",
+              title: "回归截图",
+            },
+          },
+        ],
+      },
+    });
+
+    expect(note.title).toBe("发布记录");
+    expect(note.content).toMatchObject({
+      type: "doc",
+      content: expect.any(Array),
+    });
+    expect(note.contentHtml).toContain("<h1>发布记录</h1>");
+    expect(note.contentHtml).toContain('href="https://example.com"');
+    expect(note.contentHtml).toContain('target="_blank"');
+    expect(note.contentHtml).toContain('rel="noreferrer noopener"');
+    expect(note.contentHtml).toContain(">文档</a>");
+    expect(note.contentHtml).toContain('src="/api/note-images/test-image"');
+    expect(note.contentHtml).toContain('alt="回归截图"');
+    expect(note.excerpt).toContain("发布记录");
+
+    const summaries = await noteService.list();
+    expect(summaries[0]).toMatchObject({
+      id: note.id,
+      title: "发布记录",
+      excerpt: expect.any(String),
+    });
+    expect(summaries[0]).not.toHaveProperty("content");
+    expect(await noteService.get(note.id)).toEqual(note);
+  });
+
+  it("derives titles, updates content and rejects oversized notes", async () => {
+    const note = await noteService.create({
+      title: "",
+      content: doc("第一行内容"),
+    });
+    expect(note.title).toBe("第一行内容");
+
+    const updated = await noteService.update(note.id, {
+      title: "更新后的 Note",
+      content: {
+        type: "doc",
+        content: [
+          {
+            type: "blockquote",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "引用" }],
+              },
+            ],
+          },
+          {
+            type: "codeBlock",
+            content: [{ type: "text", text: "alert(1)" }],
+          },
+        ],
+      },
+    });
+    expect(updated.title).toBe("更新后的 Note");
+    expect(updated.contentHtml).toContain("<blockquote><p>引用</p></blockquote>");
+    expect(updated.contentHtml).toContain("<pre><code>alert(1)</code></pre>");
+    expect(new Date(updated.updatedAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(note.updatedAt).getTime(),
+    );
+
+    await expect(
+      noteService.create({
+        content: doc("a".repeat(100001)),
+      }),
+    ).rejects.toMatchObject({
+      code: "NOTE_TOO_LONG",
+    });
+  });
+
+  it("deletes notes and returns not found afterwards", async () => {
+    const note = await noteService.create({
+      title: "待删除",
+      content: doc("删除测试"),
+    });
+    await noteService.remove(note.id);
+    await expect(noteService.get(note.id)).rejects.toMatchObject({
+      code: "NOTE_NOT_FOUND",
+      status: 404,
+    });
+    await expect(noteService.remove(note.id)).rejects.toMatchObject({
+      code: "NOTE_NOT_FOUND",
+      status: 404,
+    });
   });
 });
 
@@ -727,7 +884,7 @@ describe("Authentication and data isolation", () => {
     expect(relogged.user.mustChangePassword).toBe(false);
   });
 
-  it("isolates todos, templates, runs and files between users", async () => {
+  it("isolates todos, templates, runs, notes and files between users", async () => {
     const alice = authService.listUsers(admin()).find((user) => user.username === "alice")!;
     const bob = authService.createUser(admin(), {
       username: "bob",
@@ -799,6 +956,21 @@ describe("Authentication and data isolation", () => {
         note: { html: "<p>cross user file</p>", fileIds: [file.id] },
       }),
     ).rejects.toMatchObject({ code: "NOTE_FILE_NOT_FOUND" });
+
+    const aliceNote = await rawNoteService.create(alice.id, {
+      title: "Alice Note",
+      content: doc("private note"),
+    });
+    await rawNoteService.create(bob.id, {
+      title: "Bob Note",
+      content: doc("bob note"),
+    });
+    expect((await rawNoteService.list(alice.id)).map((note) => note.title)).toContain("Alice Note");
+    expect((await rawNoteService.list(alice.id)).map((note) => note.title)).not.toContain("Bob Note");
+    await expect(rawNoteService.get(bob.id, aliceNote.id)).rejects.toMatchObject({
+      code: "NOTE_NOT_FOUND",
+      status: 404,
+    });
   });
 
   it("revokes sessions when disabling users and prevents self-disable", async () => {
@@ -870,6 +1042,10 @@ describe("Authentication and data isolation", () => {
       title: "Delete run",
       version: null,
     });
+    const note = await rawNoteService.create(user.id, {
+      title: "Delete note",
+      content: doc("account delete note"),
+    });
     const file = await rawNoteFileService.create(
       user.id,
       new File([new Uint8Array([1, 2, 3])], "delete.txt", { type: "text/plain" }),
@@ -897,6 +1073,7 @@ describe("Authentication and data isolation", () => {
     expect(db.prepare("SELECT id FROM Todo WHERE id = ?").get(todo.id)).toBeUndefined();
     expect(db.prepare("SELECT id FROM SopTemplate WHERE id = ?").get(template.id)).toBeUndefined();
     expect(db.prepare("SELECT id FROM SopRun WHERE id = ?").get(run.id)).toBeUndefined();
+    expect(db.prepare("SELECT id FROM Note WHERE id = ?").get(note.id)).toBeUndefined();
     expect(db.prepare("SELECT id FROM NoteFile WHERE id = ?").get(file.id)).toBeUndefined();
     expect(db.prepare("SELECT id FROM NoteImage WHERE id = ?").get(image.id)).toBeUndefined();
     expect(fs.existsSync(filePath)).toBe(false);

@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CheckSquare, ClipboardList, KeyRound, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
+import { CheckSquare, ClipboardList, FileText, KeyRound, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { CurrentUserDto } from "@/shared/types/models";
 import { useSidebarStore } from "@/shared/stores/sidebar-store";
 
 const links = [
   { href: "/todos", label: "Todo", icon: CheckSquare },
+  { href: "/notes", label: "Note", icon: FileText },
   { href: "/runs", label: "SOP 执行", icon: ListChecks },
   { href: "/templates", label: "SOP 模板", icon: ClipboardList },
 ];

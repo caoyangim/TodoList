@@ -254,11 +254,11 @@ export function RunDetailPage({ runId }: { runId: string }) {
               {node.isParent ? (
                 <>
                   {isExpanded ? (
-                    <ChevronDown size={16} style={{ display: "inline", marginRight: 5 }} />
+                    <ChevronDown className="inline-title-icon" size={16} />
                   ) : (
-                    <ChevronRight size={16} style={{ display: "inline", marginRight: 5 }} />
+                    <ChevronRight className="inline-title-icon" size={16} />
                   )}
-                  <FolderTree size={15} style={{ display: "inline", marginRight: 7 }} />
+                  <FolderTree className="inline-title-icon spaced" size={15} />
                 </>
               ) : null}
               {node.name}
@@ -348,7 +348,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
     <>
       <header className="page-header">
         <div>
-          <Link href={`/runs?templateId=${encodeURIComponent(run.templateId)}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--muted)", fontSize: 13, marginBottom: 12 }}>
+          <Link className="back-link" href={`/runs?templateId=${encodeURIComponent(run.templateId)}`}>
             <ArrowLeft size={15} /> 返回执行列表
           </Link>
           <div className="run-title-row">
@@ -395,24 +395,31 @@ export function RunDetailPage({ runId }: { runId: string }) {
         </div>
       </header>
 
-      {error ? <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div> : null}
+      {error ? <div className="error-banner page-section">{error}</div> : null}
 
       <section className="detail-hero">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, marginBottom: 12 }}>
+        <div className="detail-progress-head">
           <div>
-            <strong style={{ fontSize: 17 }}>执行进度</strong>
-            <div className="page-subtitle" style={{ marginTop: 4 }}>
+            <strong className="detail-progress-title">执行进度</strong>
+            <div className="page-subtitle">
               {run.completedCount} / {run.totalCount} 个执行节点已完成
               {run.requiredTotalCount > 0
                 ? ` · 必须 ${run.requiredCompletedCount}/${run.requiredTotalCount}`
                 : ""}
             </div>
           </div>
-          <strong style={{ fontSize: 24, color: run.status === "COMPLETED" ? "var(--success)" : "var(--accent)" }}>{run.progressPercent}%</strong>
+          <strong className={`detail-progress-value ${run.status === "COMPLETED" ? "completed" : ""}`}>
+            {run.progressPercent}%
+          </strong>
         </div>
-        <div className="progress-track"><div className="progress-bar" style={{ width: `${run.progressPercent}%`, background: run.status === "COMPLETED" ? "var(--success)" : undefined }} /></div>
+        <div className="progress-track">
+          <div
+            className={`progress-bar ${run.status === "COMPLETED" ? "completed" : ""}`}
+            style={{ width: `${run.progressPercent}%` }}
+          />
+        </div>
         {run.status === "COMPLETED" ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 15, color: "var(--success)", fontSize: 13, fontWeight: 600 }}>
+          <div className="detail-complete-note">
             <CircleCheckBig size={17} /> 所有必须节点已完成
           </div>
         ) : null}
@@ -428,7 +435,7 @@ export function RunDetailPage({ runId }: { runId: string }) {
           }}
         >
           <div className="form-stack">
-            <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.7 }}>
+            <p className="muted-copy">
               将把“{pendingUncheck.name}”恢复为未完成状态，并重新计算父节点和 SOP
               状态。首次完成时间会保留，上次修改时间将更新为当前时间。
             </p>

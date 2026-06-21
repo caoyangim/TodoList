@@ -89,9 +89,10 @@ Route Handler 不应包含 SQL 或复杂业务判断。
 | `SopTemplateNode` | 模板节点及父子关系 |
 | `SopRun` | 独立标题、可选版本号的执行实例和模板快照 |
 | `SopRunNode` | 执行节点快照、状态、备注和时间 |
+| `Note` | 独立文档 JSON、渲染 HTML 和摘要 |
 | `NoteImage` | 富备注图片元数据 |
 
-`Todo`、`SopTemplate`、`SopRun`、`NoteFile` 和兼容用 `NoteImage` 均保存
+`Todo`、`SopTemplate`、`SopRun`、`Note`、`NoteFile` 和兼容用 `NoteImage` 均保存
 `userId`。Service 会把资源 ID 与当前用户 ID 同时作为查询条件；跨用户访问统一
 表现为资源不存在。
 
