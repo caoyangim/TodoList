@@ -12,9 +12,11 @@ import {
 import { toDateString, toTimeString } from "./calendar-page";
 
 interface CalendarCreatorModalProps {
+  initialStartDate?: string | null;
   initialDate?: string | null;
   initialTime?: string | null;
   editEvent: CalendarEventDto | null;
+  usedColors?: Set<string>;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -42,17 +44,22 @@ function toIso(dateStr: string, timeStr: string): string {
 }
 
 export function CalendarCreatorModal({
+  initialStartDate,
   initialDate,
   initialTime,
   editEvent,
+  usedColors,
   onClose,
   onSaved,
 }: CalendarCreatorModalProps) {
   const isEditing = editEvent !== null;
   const today = dateInput(new Date());
-  // When creating new, always default to today. When editing, use the event's date.
-  const seedDate = isEditing ? toDateString(editEvent!.startAt) : today;
-  // End date defaults to the clicked cell's date, falling back to today
+  // When creating new, use initialStartDate if provided, otherwise today.
+  // When editing, use the event's date.
+  const seedDate = isEditing
+    ? toDateString(editEvent!.startAt)
+    : (initialStartDate ?? today);
+  // End date defaults to the clicked/specified end date, falling back to today
   const defaultEndDate = initialDate ?? today;
 
   // Edit prefill
@@ -72,9 +79,11 @@ export function CalendarCreatorModal({
     evEndTime ?? laterTime(60),
   );
   const [isAllDay, setIsAllDay] = useState(editEvent?.isAllDay ?? false);
-  const [color, setColor] = useState<EventColor>(
-    (editEvent?.color as EventColor) ?? "#3B82F6",
-  );
+  // Pick the first unused color in the selected range, fallback to blue
+  const defaultColor: EventColor = (editEvent?.color as EventColor)
+    ?? (EVENT_COLORS.find((c) => !usedColors?.has(c.value))?.value as EventColor)
+    ?? "#3B82F6";
+  const [color, setColor] = useState<EventColor>(defaultColor);
   const [reminderDate, setReminderDate] = useState(seedDate);
   // Reminder defaults to the clicked slot time, or current time
   const [reminderTime, setReminderTime] = useState(initialTime ?? nowTime());

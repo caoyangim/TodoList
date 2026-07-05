@@ -22,6 +22,12 @@ interface CalendarMonthViewProps {
   onToggleReminder: (id: string, isCompleted: boolean) => void;
   onDeleteReminder: (id: string) => void;
   busyId: string | null;
+  // Selection
+  selecting: boolean;
+  selectStart: string | null;
+  selectEnd: string | null;
+  onCellPointerDown: (date: string, e: React.PointerEvent) => void;
+  onCellPointerEnter: (date: string) => void;
 }
 
 function buildCalendarDays(
@@ -126,6 +132,11 @@ export function CalendarMonthView({
   onToggleReminder,
   onDeleteReminder,
   busyId,
+  selecting,
+  selectStart,
+  selectEnd,
+  onCellPointerDown,
+  onCellPointerEnter,
 }: CalendarMonthViewProps) {
   const days = buildCalendarDays(year, month);
   const todayStr = toDateString(new Date().toISOString());
@@ -208,8 +219,10 @@ export function CalendarMonthView({
 
         const maxRow = sortedCross.reduce((m, e) => Math.max(m, crossDayRowMap.get(e.id) ?? 0), -1);
         const crossRows = maxRow >= 0 ? maxRow + 1 : 0;
-        // Cells get extra top padding so content (date + events) starts below the bars
-        const cellPadTop = crossRows > 0 ? crossRows * 22 + 8 : undefined;
+        // Date is absolute at top:5px; date occupies 24px + 6px margin = 30px.
+        // Cell padding-top = 30 (date area) + bar rows, so events never overlap.
+        // Bars start below the date at 35px (5px cell padding + 30px date area).
+        const cellPadTop = 30 + crossRows * 22;
 
         return (
           <div
@@ -223,6 +236,19 @@ export function CalendarMonthView({
               const cellReminders = remindersByDate.get(date) ?? [];
               const isToday = date === todayStr;
               const dayNum = parseInt(date.split("-")[2], 10);
+
+              // Selection range (normalized: start ≤ end)
+              const selStart = selectStart && selectEnd
+                ? (selectStart < selectEnd ? selectStart : selectEnd)
+                : null;
+              const selEnd = selectStart && selectEnd
+                ? (selectStart < selectEnd ? selectEnd : selectStart)
+                : null;
+              const isSelectStart = date === selectStart;
+              const isSelectEnd = date === selectEnd;
+              const isInSelectRange = selStart && selEnd
+                ? date >= selStart && date <= selEnd && date !== selectStart && date !== selectEnd
+                : false;
 
               return (
                 <CalendarGridCell
@@ -238,6 +264,12 @@ export function CalendarMonthView({
                   onToggleReminder={onToggleReminder}
                   onDeleteReminder={onDeleteReminder}
                   busyId={busyId}
+                  selecting={selecting}
+                  isSelectStart={isSelectStart}
+                  isSelectEnd={isSelectEnd}
+                  isInSelectRange={isInSelectRange}
+                  onPointerDown={onCellPointerDown}
+                  onPointerEnter={onCellPointerEnter}
                   style={{
                     gridRow: 1,
                     gridColumn: colIdx + 1,
@@ -277,7 +309,7 @@ export function CalendarMonthView({
                   style={{
                     gridRow: 1,
                     gridColumn: `${colStart} / span ${span}`,
-                    marginTop: row * 22 + 5,
+                    marginTop: row * 22 + 35,
                   }}
                 />
               );

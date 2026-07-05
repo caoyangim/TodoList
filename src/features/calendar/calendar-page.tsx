@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/shared/api-client";
 import {
   CalendarEventDto,
@@ -10,6 +10,7 @@ import {
 import { CalendarSidebar } from "./calendar-sidebar";
 import { CalendarMonthView } from "./calendar-month-view";
 import { CalendarWeekView } from "./calendar-week-view";
+import { Plus } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { LoadingSpinner } from "@/components/loading";
 import { CalendarCreatorModal } from "./calendar-creator-modal";
@@ -84,9 +85,18 @@ export function CalendarPage() {
 
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [creatorDate, setCreatorDate] = useState<string | null>(null);
+  const [creatorEndDate, setCreatorEndDate] = useState<string | null>(null);
   const [creatorTime, setCreatorTime] = useState<string | null>(null);
+  const [creatorUsedColors, setCreatorUsedColors] = useState<Set<string>>(new Set());
   const [editingEvent, setEditingEvent] = useState<CalendarEventDto | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // --- Selection ---
+  const [selecting, setSelecting] = useState(false);
+  const [selectStart, setSelectStart] = useState<string | null>(null);
+  const [selectEnd, setSelectEnd] = useState<string | null>(null);
+  const [selectMenuPos, setSelectMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     setError("");
@@ -150,10 +160,25 @@ export function CalendarPage() {
     : formatWeekRange(weekStart);
 
   // --- Creator ---
-  function openCreator(date?: string, time?: string) {
+  function openCreator(startDate?: string, endDate?: string, time?: string) {
     setEditingEvent(null);
-    setCreatorDate(date ?? null);
+    setCreatorDate(startDate ?? null);
+    setCreatorEndDate(endDate ?? null);
     setCreatorTime(time ?? null);
+    // Collect colors used by events overlapping the selected date range
+    const rangeStart = startDate ?? endDate;
+    const rangeEnd = endDate ?? startDate;
+    const used = new Set<string>();
+    if (rangeStart) {
+      for (const e of events) {
+        const es = toDateString(e.startAt);
+        const ee = toDateString(e.endAt);
+        if ((rangeEnd ? es <= rangeEnd : true) && (rangeEnd ? ee >= rangeStart : es === rangeStart)) {
+          used.add(e.color);
+        }
+      }
+    }
+    setCreatorUsedColors(used);
     setCreatorOpen(true);
   }
 
@@ -167,8 +192,75 @@ export function CalendarPage() {
     if (busyId === "creator") return;
     setCreatorOpen(false);
     setCreatorDate(null);
+    setCreatorEndDate(null);
     setCreatorTime(null);
     setEditingEvent(null);
+  }
+
+  // --- Selection ---
+  function handleCellPointerDown(date: string, e: React.PointerEvent) {
+    if (selecting) {
+      // Second tap after long-press: set end date and show popup
+      setSelectEnd(date);
+      setSelectMenuPos({ x: e.clientX, y: e.clientY });
+      return;
+    }
+    longPressTimer.current = setTimeout(() => {
+      setSelecting(true);
+      setSelectStart(date);
+      setSelectEnd(null);
+      setSelectMenuPos(null);
+    }, 400);
+  }
+
+  function handleCellPointerEnter(_date: string) {
+    // Cancel long-press if pointer moved before timer fires
+    if (!selecting && longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function handlePointerUp(_e: React.PointerEvent) {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  // Close popup and exit selection mode on outside click
+  useEffect(() => {
+    if (!selectMenuPos) return;
+    function onPointerDown(e: PointerEvent) {
+      // Ignore clicks inside the popup itself
+      const target = e.target as HTMLElement;
+      if (target.closest(".calendar-select-popup")) return;
+      setSelectMenuPos(null);
+      setSelecting(false);
+      setSelectStart(null);
+      setSelectEnd(null);
+    }
+    const id = setTimeout(() => {
+      window.addEventListener("pointerdown", onPointerDown, { once: true });
+    }, 100);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [selectMenuPos]);
+
+  function handleSelectCreate() {
+    const start = selectStart && selectEnd
+      ? (selectStart < selectEnd ? selectStart : selectEnd)
+      : selectStart;
+    const end = selectStart && selectEnd
+      ? (selectStart < selectEnd ? selectEnd : selectStart)
+      : selectEnd;
+    setSelectMenuPos(null);
+    setSelecting(false);
+    setSelectStart(null);
+    setSelectEnd(null);
+    openCreator(start ?? undefined, end ?? undefined);
   }
 
   // --- Reminder toggle ---
@@ -225,7 +317,10 @@ export function CalendarPage() {
         onCreateClick={() => openCreator()}
       />
 
-      <div className="calendar-main">
+      <div
+        className="calendar-main"
+        onPointerUp={handlePointerUp}
+      >
         {/* Header */}
         <div className="calendar-header">
           <div className="calendar-nav">
@@ -293,6 +388,11 @@ export function CalendarPage() {
             onToggleReminder={handleToggleReminder}
             onDeleteReminder={handleDeleteReminder}
             busyId={busyId}
+            selecting={selecting}
+            selectStart={selectStart}
+            selectEnd={selectEnd}
+            onCellPointerDown={handleCellPointerDown}
+            onCellPointerEnter={handleCellPointerEnter}
           />
         )}
 
@@ -315,15 +415,35 @@ export function CalendarPage() {
       {/* Creator/Editor Modal */}
       {creatorOpen && (
         <CalendarCreatorModal
-          initialDate={creatorDate}
+          initialStartDate={creatorDate}
+          initialDate={creatorEndDate}
           initialTime={creatorTime}
           editEvent={editingEvent}
+          usedColors={creatorUsedColors}
           onClose={closeCreator}
           onSaved={() => {
             closeCreator();
             void loadData();
           }}
         />
+      )}
+
+      {/* Selection Popup Menu */}
+      {selectMenuPos && (
+        <div
+          className="calendar-select-popup"
+          style={{ left: selectMenuPos.x, top: selectMenuPos.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            className="calendar-select-popup-btn"
+            type="button"
+            onClick={() => handleSelectCreate()}
+          >
+            <Plus size={15} />
+            创建日程
+          </button>
+        </div>
       )}
 
       {/* Delete Reminder Confirmation Modal */}

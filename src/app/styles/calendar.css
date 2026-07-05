@@ -178,6 +178,7 @@
 .calendar-cell {
   display: flex;
   flex-direction: column;
+  position: relative;
   min-height: 96px;
   padding: 5px 5px;
   border-right: 1px solid var(--line);
@@ -190,14 +191,66 @@
 .calendar-cell.today { background: var(--accent-soft); }
 .calendar-cell.other-month .calendar-cell-date { color: var(--line-strong); }
 
+/* --- Selection mode --- */
+.calendar-cell.selecting {
+  cursor: cell;
+  user-select: none;
+  touch-action: none;
+}
+.calendar-cell.in-range {
+  background: #e8e0f0;
+}
+.calendar-cell.select-start {
+  background: #d4c8e8;
+  box-shadow: inset 2px 0 0 #8b5cf6;
+}
+.calendar-cell.select-end {
+  background: #d4c8e8;
+  box-shadow: inset -2px 0 0 #8b5cf6;
+}
+.calendar-cell.select-start.select-end {
+  box-shadow: inset 2px 0 0 #8b5cf6, inset -2px 0 0 #8b5cf6;
+}
+
+/* --- Selection popup menu --- */
+.calendar-select-popup {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  overflow: hidden;
+}
+.calendar-select-popup-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px; font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.calendar-select-popup-btn:hover {
+  background: var(--accent-soft);
+}
+
 .calendar-cell-date {
+  position: absolute;
+  top: 5px;
+  left: 5px;
   width: 24px; height: 24px;
   line-height: 24px;
   text-align: center;
   font-size: 12px; font-weight: 600;
   color: var(--text);
   border-radius: 50%;
-  margin-bottom: 6px;
   flex-shrink: 0;
 }
 .calendar-cell.today .calendar-cell-date {

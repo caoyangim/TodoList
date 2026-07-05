@@ -18,11 +18,19 @@ interface CalendarGridCellProps {
   onDeleteReminder: (id: string) => void;
   busyId: string | null;
   style?: CSSProperties;
+  // Selection
+  selecting: boolean;
+  isSelectStart: boolean;
+  isSelectEnd: boolean;
+  isInSelectRange: boolean;
+  onPointerDown: (date: string, e: React.PointerEvent) => void;
+  onPointerEnter: (date: string) => void;
 }
 
 const MAX_VISIBLE = 3;
 
 export function CalendarGridCell({
+  date,
   dayNum,
   isCurrentMonth,
   isToday,
@@ -34,6 +42,12 @@ export function CalendarGridCell({
   onDeleteReminder,
   busyId,
   style,
+  selecting,
+  isSelectStart,
+  isSelectEnd,
+  isInSelectRange,
+  onPointerDown,
+  onPointerEnter,
 }: CalendarGridCellProps) {
   const eventEntries = events.map((e) => ({ type: "event" as const, event: e }));
   const reminderEntries = reminders.map((r) => ({ type: "reminder" as const, reminder: r }));
@@ -41,11 +55,32 @@ export function CalendarGridCell({
   const visible = allEntries.slice(0, MAX_VISIBLE);
   const overflow = allEntries.length - MAX_VISIBLE;
 
+  const classNames = [
+    "calendar-cell",
+    isToday ? "today" : "",
+    !isCurrentMonth ? "other-month" : "",
+    selecting ? "selecting" : "",
+    isSelectStart ? "select-start" : "",
+    isSelectEnd ? "select-end" : "",
+    isInSelectRange && !isSelectStart && !isSelectEnd ? "in-range" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
-      className={`calendar-cell${isToday ? " today" : ""}${!isCurrentMonth ? " other-month" : ""}`}
+      className={classNames}
       style={style}
-      onClick={(e) => { if (e.target === e.currentTarget) onCellClick(); }}
+      onClick={(e) => {
+        if (selecting) return;
+        if (e.target === e.currentTarget) onCellClick();
+      }}
+      onPointerDown={(e) => {
+        onPointerDown(date, e);
+      }}
+      onPointerEnter={() => {
+        if (selecting) onPointerEnter(date);
+      }}
     >
       <span className="calendar-cell-date">{dayNum}</span>
 
