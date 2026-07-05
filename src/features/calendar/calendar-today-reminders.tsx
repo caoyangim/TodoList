@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle, Circle, Flag, MapPin, Trash2 } from "lucide-react";
+import { CheckCircle, Circle, MapPin, Trash2 } from "lucide-react";
 import { CalendarEventDto, CalendarReminderDto } from "@/shared/types/calendar";
 import { toDateString, toTimeString } from "./calendar-page";
 
 interface TodayEntry {
-  type: "reminder" | "event-start" | "event-end" | "stop";
+  type: "reminder" | "stop";
   id: string;
   title: string;
   time?: string;
@@ -41,30 +41,6 @@ export function CalendarTodayReminders({
         title: r.title,
         time: toTimeString(r.dueAt),
         completed: r.isCompleted,
-      });
-    }
-  }
-
-  // Events starting today
-  for (const e of events) {
-    if (toDateString(e.startAt) === today) {
-      entries.push({
-        type: "event-start",
-        id: e.id,
-        title: e.title,
-        color: e.color,
-      });
-    }
-  }
-
-  // Events ending today (only if start != end, to avoid duplicate with start)
-  for (const e of events) {
-    if (toDateString(e.endAt) === today && toDateString(e.startAt) !== today) {
-      entries.push({
-        type: "event-end",
-        id: e.id,
-        title: e.title,
-        color: e.color,
       });
     }
   }
@@ -112,19 +88,14 @@ export function CalendarTodayReminders({
             <span className="calendar-today-item-icon">
               {entry.type === "reminder" ? (
                 entry.completed ? <CheckCircle size={14} /> : <Circle size={14} />
-              ) : entry.type === "stop" ? (
-                <MapPin size={14} color={entry.color} />
               ) : (
-                <Flag size={14} color={entry.color} />
+                <MapPin size={14} color={entry.color} />
               )}
             </span>
 
             {/* Label */}
             <span className="calendar-today-item-label">
-              {entry.type === "reminder" && "提醒"}
-              {entry.type === "event-start" && "开始"}
-              {entry.type === "event-end" && "结束"}
-              {entry.type === "stop" && "节点"}
+              {entry.type === "reminder" ? "提醒" : "节点"}
             </span>
 
             {/* Title */}

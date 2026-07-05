@@ -103,11 +103,12 @@ export function CalendarCreatorModal({
   const dayDiff = Math.round(
     (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000,
   );
-  const maxStops = Math.max(0, dayDiff - 1);
-  // Available dates between start and end (exclusive)
-  const stopDates = Array.from({ length: Math.max(0, dayDiff - 1) }, (_, i) => {
+  // Max nodes = total days (inclusive of start and end)
+  const maxStops = dayDiff + 1;
+  // Available dates from start to end (inclusive)
+  const stopDates = Array.from({ length: maxStops }, (_, i) => {
     const d = new Date(startDate);
-    d.setDate(d.getDate() + i + 1);
+    d.setDate(d.getDate() + i);
     return dateInput(d);
   });
   const usedStopDates = new Set(stops.map((s) => s.date));
@@ -116,7 +117,7 @@ export function CalendarCreatorModal({
   useEffect(() => {
     setStops((prev) => {
       const valid = prev.filter(
-        (s) => s.date > startDate && s.date < endDate,
+        (s) => s.date >= startDate && s.date <= endDate,
       );
       return valid.slice(0, maxStops);
     });
