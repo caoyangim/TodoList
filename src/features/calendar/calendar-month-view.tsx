@@ -322,7 +322,6 @@ export function CalendarMonthView({
                 const rgba = (rgb: number[], a: number) =>
                   `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
                 const baseRgb = hexToRgb(event.color);
-                const baseColor = rgba(baseRgb, 0.16);
                 const stopColor = rgba(baseRgb, 0.35);
                 const colW = 100 / span; // width of one column in %
                 allStops.forEach((s) => {
@@ -330,10 +329,10 @@ export function CalendarMonthView({
                   const left = ((si - effStart) / span) * 100;
                   const right = left + colW;
                   barColors.push(
-                    `${baseColor} ${left}%`,
+                    `transparent ${left}%`,
                     `${stopColor} ${left}%`,
                     `${stopColor} ${right}%`,
-                    `${baseColor} ${right}%`,
+                    `transparent ${right}%`,
                   );
                 });
               }
