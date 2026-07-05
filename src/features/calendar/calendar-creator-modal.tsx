@@ -78,13 +78,13 @@ export function CalendarCreatorModal({
   const [endTime, setEndTime] = useState(
     evEndTime ?? laterTime(60),
   );
-  const [isAllDay, setIsAllDay] = useState(editEvent?.isAllDay ?? false);
+  const [isAllDay, setIsAllDay] = useState(editEvent?.isAllDay ?? true);
   // Pick the first unused color in the selected range, fallback to blue
   const defaultColor: EventColor = (editEvent?.color as EventColor)
     ?? (EVENT_COLORS.find((c) => !usedColors?.has(c.value))?.value as EventColor)
     ?? "#3B82F6";
   const [color, setColor] = useState<EventColor>(defaultColor);
-  const [reminderDate, setReminderDate] = useState(seedDate);
+  const [reminderDate, setReminderDate] = useState(initialDate ?? seedDate);
   // Reminder defaults to the clicked slot time, or current time
   const [reminderTime, setReminderTime] = useState(initialTime ?? nowTime());
   const [repeat, setRepeat] = useState<"none" | "daily" | "weekly">("none");

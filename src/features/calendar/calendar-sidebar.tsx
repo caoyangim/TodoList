@@ -41,12 +41,10 @@ export function CalendarSidebar({
         <div className="calendar-legend-title">显示</div>
         <label className="calendar-legend-item">
           <input type="checkbox" checked={showEvents} onChange={onToggleEvents} />
-          <span className="calendar-legend-swatch event" />
           我的日程
         </label>
         <label className="calendar-legend-item">
           <input type="checkbox" checked={showReminders} onChange={onToggleReminders} />
-          <span className="calendar-legend-swatch reminder" />
           我的提醒
         </label>
       </div>

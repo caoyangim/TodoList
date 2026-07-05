@@ -383,7 +383,7 @@ export function CalendarPage() {
             reminders={reminders}
             showEvents={showEvents}
             showReminders={showReminders}
-            onCellClick={(date) => openCreator(date)}
+            onCellClick={(date) => openCreator(undefined, date)}
             onEventClick={(event) => openEditor(event)}
             onToggleReminder={handleToggleReminder}
             onDeleteReminder={handleDeleteReminder}
@@ -403,7 +403,7 @@ export function CalendarPage() {
             reminders={reminders}
             showEvents={showEvents}
             showReminders={showReminders}
-            onSlotClick={(date, time) => openCreator(date, time)}
+            onSlotClick={(date, time) => openCreator(date, undefined, time)}
             onEventClick={(event) => openEditor(event)}
             onToggleReminder={handleToggleReminder}
             onDeleteReminder={handleDeleteReminder}
