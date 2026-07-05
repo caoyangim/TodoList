@@ -26,6 +26,7 @@ interface CalendarMonthViewProps {
   selecting: boolean;
   selectStart: string | null;
   selectEnd: string | null;
+  dateStyle: "centered" | "corner";
   onCellPointerDown: (date: string, e: React.PointerEvent) => void;
   onCellPointerEnter: (date: string) => void;
 }
@@ -135,6 +136,7 @@ export function CalendarMonthView({
   selecting,
   selectStart,
   selectEnd,
+  dateStyle,
   onCellPointerDown,
   onCellPointerEnter,
 }: CalendarMonthViewProps) {
@@ -219,10 +221,10 @@ export function CalendarMonthView({
 
         const maxRow = sortedCross.reduce((m, e) => Math.max(m, crossDayRowMap.get(e.id) ?? 0), -1);
         const crossRows = maxRow >= 0 ? maxRow + 1 : 0;
-        // Date is absolute at top:5px; date occupies 24px + 6px margin = 30px.
-        // Cell padding-top = 30 (date area) + bar rows, so events never overlap.
-        // Bars start below the date at 35px (5px cell padding + 30px date area).
-        const cellPadTop = 30 + crossRows * 22;
+        // Date offset varies by style: centered ~50px, corner ~30px
+        const dateOffset = dateStyle === "centered" ? 50 : 30;
+        const cellPadTop = dateOffset + crossRows * 30;
+        const barTop = dateOffset + 5; // cell padding compensation
 
         return (
           <div
@@ -268,6 +270,7 @@ export function CalendarMonthView({
                   isSelectStart={isSelectStart}
                   isSelectEnd={isSelectEnd}
                   isInSelectRange={isInSelectRange}
+                  dateStyle={dateStyle}
                   onPointerDown={onCellPointerDown}
                   onPointerEnter={onCellPointerEnter}
                   style={{
@@ -300,16 +303,66 @@ export function CalendarMonthView({
 
               const row = crossDayRowMap.get(event.id) ?? 0;
 
+              // Compute stop label positions for this week's bar segment
+              const effStart = startIdx >= 0 ? startIdx : 0;
+              const effEnd = endIdx >= 0 ? endIdx : 6;
+
+              // Highlight only stop days, not segments between them
+              const barColors: string[] = [];
+              const allStops = (event.stops ?? []).filter((s) => {
+                const si = weekDates.indexOf(s.date);
+                return si >= effStart && si <= effEnd;
+              });
+              if (allStops.length > 0) {
+                const hexToRgb = (h: string) => [
+                  parseInt(h.slice(1, 3), 16),
+                  parseInt(h.slice(3, 5), 16),
+                  parseInt(h.slice(5, 7), 16),
+                ];
+                const rgba = (rgb: number[], a: number) =>
+                  `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+                const baseRgb = hexToRgb(event.color);
+                const baseColor = rgba(baseRgb, 0.16);
+                const stopColor = rgba(baseRgb, 0.35);
+                const colW = 100 / span; // width of one column in %
+                allStops.forEach((s) => {
+                  const si = weekDates.indexOf(s.date);
+                  const left = ((si - effStart) / span) * 100;
+                  const right = left + colW;
+                  barColors.push(
+                    `${baseColor} ${left}%`,
+                    `${stopColor} ${left}%`,
+                    `${stopColor} ${right}%`,
+                    `${baseColor} ${right}%`,
+                  );
+                });
+              }
+
+              const stopLabels = allStops.map((s, si) => {
+                const idx = weekDates.indexOf(s.date);
+                const leftPercent = ((idx - effStart) / span) * 100;
+                const maxWidth = 100 / span;
+                const baseRgb = [
+                  parseInt(event.color.slice(1, 3), 16),
+                  parseInt(event.color.slice(3, 5), 16),
+                  parseInt(event.color.slice(5, 7), 16),
+                ];
+                // Use event color directly for stop labels
+                return { title: s.title, leftPercent, maxWidth, color: event.color };
+              });
+
               return (
                 <CalendarEventBar
                   key={`cross-${event.id}-w${wi}`}
                   event={event}
                   position={position}
                   onClick={() => onEventClick(event)}
+                  stopLabels={stopLabels.length > 0 ? stopLabels : undefined}
                   style={{
                     gridRow: 1,
                     gridColumn: `${colStart} / span ${span}`,
-                    marginTop: row * 22 + 35,
+                    marginTop: row * 30 + barTop,
+                    ...(barColors.length > 0 ? { backgroundImage: `linear-gradient(to right, ${barColors.join(", ")})` } : {}),
                   }}
                 />
               );

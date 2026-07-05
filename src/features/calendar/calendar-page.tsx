@@ -10,7 +10,7 @@ import {
 import { CalendarSidebar } from "./calendar-sidebar";
 import { CalendarMonthView } from "./calendar-month-view";
 import { CalendarWeekView } from "./calendar-week-view";
-import { Plus } from "lucide-react";
+import { Columns2, Plus } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { LoadingSpinner } from "@/components/loading";
 import { CalendarCreatorModal } from "./calendar-creator-modal";
@@ -65,6 +65,7 @@ export function CalendarPage() {
   const [error, setError] = useState("");
   const [showEvents, setShowEvents] = useState(true);
   const [showReminders, setShowReminders] = useState(true);
+  const [dateStyle, setDateStyle] = useState<"centered" | "corner">("corner");
 
   // Month view state
   const [currentMonth, setCurrentMonth] = useState(() => {
@@ -343,24 +344,35 @@ export function CalendarPage() {
             </button>
           </div>
 
-          <button className="calendar-today-btn" type="button" onClick={goToToday}>
-            今天
-          </button>
+          <div className="calendar-header-right">
+            <div className="calendar-view-tabs">
+              <button
+                className={`calendar-view-tab ${view === "month" ? "active" : ""}`}
+                type="button"
+                onClick={() => setView("month")}
+              >
+                月
+              </button>
+              <button
+                className={`calendar-view-tab ${view === "week" ? "active" : ""}`}
+                type="button"
+                onClick={() => setView("week")}
+              >
+                周
+              </button>
+            </div>
 
-          <div className="calendar-view-tabs">
-            <button
-              className={`calendar-view-tab ${view === "month" ? "active" : ""}`}
-              type="button"
-              onClick={() => setView("month")}
-            >
-              月
+            <button className="calendar-today-btn" type="button" onClick={goToToday}>
+              今天
             </button>
+
             <button
-              className={`calendar-view-tab ${view === "week" ? "active" : ""}`}
+              className={`calendar-icon-btn${dateStyle === "centered" ? " active" : ""}`}
               type="button"
-              onClick={() => setView("week")}
+              onClick={() => setDateStyle((s) => (s === "centered" ? "corner" : "centered"))}
+              title="切换日期显示样式"
             >
-              周
+              <Columns2 size={16} />
             </button>
           </div>
         </div>
@@ -391,6 +403,7 @@ export function CalendarPage() {
             selecting={selecting}
             selectStart={selectStart}
             selectEnd={selectEnd}
+            dateStyle={dateStyle}
             onCellPointerDown={handleCellPointerDown}
             onCellPointerEnter={handleCellPointerEnter}
           />

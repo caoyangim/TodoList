@@ -11,8 +11,8 @@ import { useSidebarStore } from "@/shared/stores/sidebar-store";
 
 const links = [
   { href: "/overview", label: "概览", icon: LayoutDashboard },
-  { href: "/calendar", label: "日程", icon: Calendar },
   { href: "/todos", label: "Todo", icon: CheckSquare },
+  { href: "/calendar", label: "日程", icon: Calendar },
   { href: "/notes", label: "Note", icon: FileText },
   { href: "/runs", label: "SOP 执行", icon: ListChecks },
   { href: "/templates", label: "SOP 模板", icon: ClipboardList },

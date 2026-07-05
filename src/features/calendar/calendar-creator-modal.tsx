@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { apiRequest } from "@/shared/api-client";
 import {
   CalendarEventDto,
   CalendarReminderDto,
+  EventStop,
   EVENT_COLORS,
   EventColor,
 } from "@/shared/types/calendar";
@@ -41,6 +43,15 @@ function toIso(dateStr: string, timeStr: string): string {
   const [h, m] = timeStr.split(":").map(Number);
   const parts = dateStr.split("-").map(Number);
   return new Date(parts[0], parts[1] - 1, parts[2], h, m).toISOString();
+}
+
+/** Darken a hex color by factor (0 = unchanged, 1 = black) */
+function shadeColor(hex: string, factor: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const d = (c: number) => Math.round(c * (1 - factor));
+  return `#${d(r).toString(16).padStart(2, "0")}${d(g).toString(16).padStart(2, "0")}${d(b).toString(16).padStart(2, "0")}`;
 }
 
 export function CalendarCreatorModal({
@@ -84,6 +95,54 @@ export function CalendarCreatorModal({
     ?? (EVENT_COLORS.find((c) => !usedColors?.has(c.value))?.value as EventColor)
     ?? "#3B82F6";
   const [color, setColor] = useState<EventColor>(defaultColor);
+
+  // --- Intermediate stops ---
+  const [stops, setStops] = useState<EventStop[]>(
+    editEvent?.stops ?? [],
+  );
+  const dayDiff = Math.round(
+    (new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000,
+  );
+  const maxStops = Math.max(0, dayDiff - 1);
+  // Available dates between start and end (exclusive)
+  const stopDates = Array.from({ length: Math.max(0, dayDiff - 1) }, (_, i) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i + 1);
+    return dateInput(d);
+  });
+  const usedStopDates = new Set(stops.map((s) => s.date));
+
+  // Clean up stops when date range shrinks
+  useEffect(() => {
+    setStops((prev) => {
+      const valid = prev.filter(
+        (s) => s.date > startDate && s.date < endDate,
+      );
+      return valid.slice(0, maxStops);
+    });
+  }, [startDate, endDate, maxStops]);
+
+  function addStop() {
+    const available = stopDates.find((d) => !usedStopDates.has(d));
+    if (!available || stops.length >= maxStops) return;
+    setStops((prev) =>
+      [...prev, { date: available, title: "" }].sort(
+        (a, b) => a.date.localeCompare(b.date),
+      ),
+    );
+  }
+
+  function updateStop(index: number, field: "date" | "title", value: string) {
+    setStops((prev) => {
+      const next = prev.map((s, i) => (i === index ? { ...s, [field]: value } : s));
+      return next.sort((a, b) => a.date.localeCompare(b.date));
+    });
+  }
+
+  function removeStop(index: number) {
+    setStops((prev) => prev.filter((_, i) => i !== index));
+  }
+
   const [reminderDate, setReminderDate] = useState(initialDate ?? seedDate);
   // Reminder defaults to the clicked slot time, or current time
   const [reminderTime, setReminderTime] = useState(initialTime ?? nowTime());
@@ -108,7 +167,7 @@ export function CalendarCreatorModal({
         const sAt = isAllDay ? toIso(startDate, "00:00") : toIso(startDate, startTime);
         const eAt = isAllDay ? toIso(endDate, "23:59") : toIso(endDate, endTime);
         if (new Date(eAt) <= new Date(sAt)) { setError("结束时间必须晚于开始时间"); setSaving(false); return; }
-        const body = { title: title.trim(), description: description.trim() || null, startAt: sAt, endAt: eAt, isAllDay, color };
+        const body = { title: title.trim(), description: description.trim() || null, startAt: sAt, endAt: eAt, isAllDay, color, stops };
         if (isEditing) {
           await apiRequest<CalendarEventDto>(`/api/calendar/events/${editEvent!.id}`, { method: "PATCH", body: JSON.stringify(body) });
         } else {
@@ -201,6 +260,60 @@ export function CalendarCreatorModal({
                 ))}
               </div>
             </div>
+
+            {/* Intermediate stops */}
+            {dayDiff > 1 && (
+              <div className="field">
+                <label>中间节点</label>
+                <div className="event-stops-list">
+                  {stops.map((stop, i) => (
+                    <div key={i} className="event-stop-item">
+                      <span
+                        className="event-stop-dot"
+                        style={{
+                          backgroundColor: shadeColor(color, (i + 1) * 0.2),
+                        }}
+                      />
+                      <input
+                        className="input"
+                        type="date"
+                        min={stopDates[0]}
+                        max={stopDates[stopDates.length - 1]}
+                        value={stop.date}
+                        onChange={(e) => updateStop(i, "date", e.target.value)}
+                        style={{ flex: "0 0 140px" }}
+                      />
+                      <input
+                        className="input"
+                        placeholder="节点标题"
+                        maxLength={100}
+                        value={stop.title}
+                        onChange={(e) => updateStop(i, "title", e.target.value)}
+                        style={{ flex: 1, minWidth: 0 }}
+                      />
+                      <button
+                        type="button"
+                        className="event-stop-remove"
+                        title="移除节点"
+                        onClick={() => removeStop(i)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {stops.length < maxStops && (
+                    <button
+                      type="button"
+                      className="event-stop-add"
+                      onClick={addStop}
+                    >
+                      <Plus size={14} />
+                      添加节点（{stops.length}/{maxStops}）
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
 

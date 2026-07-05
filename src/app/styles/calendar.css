@@ -8,11 +8,12 @@
 /* --- Page layout --- */
 .calendar-workspace {
   min-height: 0;
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 
 /* Tighter sidebar padding than the default workspace-sidebar */
 .calendar-workspace .workspace-sidebar {
-  padding: 20px 14px;
+  padding: 18px 12px;
 }
 
 .calendar-main {
@@ -156,6 +157,30 @@
   background: var(--accent);
 }
 
+.calendar-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Icon toggle button (date style) */
+.calendar-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  padding: 0;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.calendar-icon-btn:hover { background: var(--surface-muted); color: var(--text); }
+.calendar-icon-btn.active {
+  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ========================================
    Month View — Grid
    ======================================== */
@@ -179,7 +204,7 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  min-height: 96px;
+  min-height: 110px;
   padding: 5px 5px;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
@@ -241,21 +266,57 @@
   background: var(--accent-soft);
 }
 
+/* --- Date: centered (default) --- */
 .calendar-cell-date {
   position: absolute;
-  top: 5px;
-  left: 5px;
-  width: 24px; height: 24px;
-  line-height: 24px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: auto; height: auto;
+  line-height: 1;
   text-align: center;
-  font-size: 12px; font-weight: 600;
-  color: var(--text);
-  border-radius: 50%;
+  font-size: 42px; font-weight: 700;
+  color: #d4d0cb;
+  border-radius: 0;
   flex-shrink: 0;
+  pointer-events: none;
 }
 .calendar-cell.today .calendar-cell-date {
-  background: var(--accent);
-  color: white;
+  width: 48px; height: 48px;
+  line-height: 48px;
+  font-size: 24px;
+  background: #fce8e5;
+  color: var(--accent);
+  font-weight: 700;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.calendar-cell.other-month .calendar-cell-date {
+  color: #ece8e2;
+}
+
+/* --- Date: corner (top-left) --- */
+.calendar-cell.date-corner .calendar-cell-date {
+  top: 4px;
+  left: 4px;
+  transform: none;
+  width: 30px; height: 30px;
+  line-height: 30px;
+  font-size: 18px; font-weight: 600;
+  color: var(--text);
+}
+.calendar-cell.date-corner.today .calendar-cell-date {
+  width: 30px; height: 30px;
+  line-height: 30px;
+  font-size: 18px;
+  background: #fce8e5;
+  color: var(--accent);
+  font-weight: 700;
+  border-radius: 50%;
+  transform: none;
+}
+.calendar-cell.date-corner.other-month .calendar-cell-date {
+  color: var(--line-strong);
 }
 .calendar-cell-more {
   font-size: 11px; color: var(--muted);
@@ -268,10 +329,10 @@
 
 .event-bar {
   display: block;
-  padding: 1px 6px;
-  margin-bottom: 2px;
-  font-size: 11px;
-  line-height: 1.45;
+  padding: 3px 8px;
+  margin-bottom: 3px;
+  font-size: 16px;
+  line-height: 1.4;
   border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -289,17 +350,34 @@
 /* Cross-day bars overlay the cell padding area, same grid row as cells */
 .calendar-grid > .event-bar {
   margin: 2px 4px;
-  height: 20px;
-  line-height: 20px;
+  height: 28px;
+  line-height: 28px;
   align-self: start;
   z-index: 2;
+}
+.event-bar-title {
+  position: relative;
+  z-index: 1;
+}
+.event-bar-stop {
+  position: absolute;
+  top: 0; bottom: 0;
+  display: flex; align-items: center;
+  padding: 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% / var(--bar-span, 4));
+  opacity: .85;
 }
 
 /* --- Reminder tags --- */
 .reminder-tag {
-  display: flex; align-items: center; gap: 3px;
-  padding: 1px 5px; margin-bottom: 2px;
-  font-size: 11px; line-height: 1.45;
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 7px; margin-bottom: 3px;
+  font-size: 16px; line-height: 1.4;
   color: #c2410c;
   background: #fff7ed;
   border-radius: 4px;
@@ -414,7 +492,7 @@
 }
 .week-all-day-row .event-bar {
   margin: 0 3px;
-  line-height: 22px;
+  line-height: 28px;
 }
 
 /* Time grid */
@@ -498,3 +576,42 @@
 .segment-btn:not(:last-child) { border-right: 1px solid var(--line); }
 .segment-btn:hover { background: var(--surface-muted); }
 .segment-btn.active { color: white; background: var(--accent); }
+
+/* --- Event stops (intermediate nodes) --- */
+.event-stops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.event-stop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-stop-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.event-stop-remove {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.event-stop-remove:hover { color: #ef4444; border-color: #ef4444; }
+.event-stop-add {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px; color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.event-stop-add:hover { color: var(--accent); border-color: var(--accent); }

@@ -23,6 +23,7 @@ interface CalendarGridCellProps {
   isSelectStart: boolean;
   isSelectEnd: boolean;
   isInSelectRange: boolean;
+  dateStyle: "centered" | "corner";
   onPointerDown: (date: string, e: React.PointerEvent) => void;
   onPointerEnter: (date: string) => void;
 }
@@ -46,6 +47,7 @@ export function CalendarGridCell({
   isSelectStart,
   isSelectEnd,
   isInSelectRange,
+  dateStyle,
   onPointerDown,
   onPointerEnter,
 }: CalendarGridCellProps) {
@@ -63,6 +65,7 @@ export function CalendarGridCell({
     isSelectStart ? "select-start" : "",
     isSelectEnd ? "select-end" : "",
     isInSelectRange && !isSelectStart && !isSelectEnd ? "in-range" : "",
+    `date-${dateStyle}`,
   ]
     .filter(Boolean)
     .join(" ");

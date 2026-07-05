@@ -4,11 +4,19 @@ import { CSSProperties } from "react";
 import { CalendarEventDto } from "@/shared/types/calendar";
 import { toTimeString } from "./calendar-page";
 
+interface StopLabel {
+  title: string;
+  leftPercent: number;
+  maxWidth: number;
+  color: string;
+}
+
 interface CalendarEventBarProps {
   event: CalendarEventDto;
   position: "start" | "middle" | "end" | "single";
   style?: CSSProperties;
   onClick?: () => void;
+  stopLabels?: StopLabel[];
 }
 
 function eventBarStyle(event: CalendarEventDto): CSSProperties {
@@ -20,7 +28,7 @@ function eventBarStyle(event: CalendarEventDto): CSSProperties {
   };
 }
 
-export function CalendarEventBar({ event, position, style, onClick }: CalendarEventBarProps) {
+export function CalendarEventBar({ event, position, style, onClick, stopLabels }: CalendarEventBarProps) {
   const timeLabel = event.isAllDay ? null : `${toTimeString(event.startAt)} `;
 
   const classNames = [
@@ -35,14 +43,26 @@ export function CalendarEventBar({ event, position, style, onClick }: CalendarEv
     <span
       className={classNames}
       title={event.title}
-      style={{ ...eventBarStyle(event), ...style }}
+      style={{ ...eventBarStyle(event), position: "relative", ...style }}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.();
       }}
     >
-      {timeLabel}
-      {event.title}
+      <span className="event-bar-title">
+        {timeLabel}
+        {event.title}
+      </span>
+      {stopLabels?.map((sp, i) => (
+        <span
+          key={i}
+          className="event-bar-stop"
+          style={{ left: `${sp.leftPercent}%`, maxWidth: `${sp.maxWidth}%`, color: sp.color }}
+          title={sp.title}
+        >
+          {sp.title}
+        </span>
+      ))}
     </span>
   );
 }

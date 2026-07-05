@@ -223,6 +223,7 @@ ensureColumn("SopRunNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("Note", "contentHtml", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("Note", "excerpt", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("Note", "deletedAt", "TEXT");
+ensureColumn("CalendarEvent", "stops", "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn("CalendarEvent", "color", "TEXT NOT NULL DEFAULT '#3B82F6'");
 ensureColumn("Note", "content", "TEXT NOT NULL DEFAULT '{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}'");
 

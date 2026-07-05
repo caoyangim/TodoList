@@ -4,8 +4,9 @@ import { AppError } from "@/server/errors";
 import { eventInputSchema, eventPatchSchema } from "@/shared/schemas/calendar";
 import { CalendarEventDto } from "@/shared/types/calendar";
 
-type EventRow = CalendarEventDto & {
+type EventRow = Omit<CalendarEventDto, "stops"> & {
   userId: string;
+  stops: string; // raw JSON from DB
 };
 
 function getEventRow(userId: string, id: string) {
@@ -17,7 +18,12 @@ function getEventRow(userId: string, id: string) {
 function toEventDto(row: EventRow): CalendarEventDto {
   const { userId: _userId, ...dto } = row;
   void _userId;
-  return { ...dto, isAllDay: Boolean(row.isAllDay) };
+  // Parse stops from JSON string (DB may return it as a string or already parsed)
+  let stops: CalendarEventDto["stops"] = [];
+  try {
+    stops = typeof row.stops === "string" ? JSON.parse(row.stops) : (row.stops ?? []);
+  } catch { /* keep empty */ }
+  return { ...dto, isAllDay: Boolean(row.isAllDay), stops };
 }
 
 export const calendarEventService = {
@@ -56,6 +62,7 @@ export const calendarEventService = {
       isAllDay: data.isAllDay,
       color: data.color,
       todoId: data.todoId ?? null,
+      stops: data.stops ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -79,11 +86,11 @@ export const calendarEventService = {
 
       db.prepare(
         `INSERT INTO CalendarEvent (
-          id, userId, title, description, startAt, endAt, isAllDay, color, todoId, createdAt, updatedAt
+          id, userId, title, description, startAt, endAt, isAllDay, color, todoId, stops, createdAt, updatedAt
         ) VALUES (
-          @id, @userId, @title, @description, @startAt, @endAt, @isAllDay, @color, @todoId, @createdAt, @updatedAt
+          @id, @userId, @title, @description, @startAt, @endAt, @isAllDay, @color, @todoId, @stops, @createdAt, @updatedAt
         )`,
-      ).run({ ...dto, isAllDay: data.isAllDay ? 1 : 0, userId });
+      ).run({ ...dto, isAllDay: data.isAllDay ? 1 : 0, stops: JSON.stringify(data.stops), userId });
     })();
 
     return dto;
@@ -105,9 +112,9 @@ export const calendarEventService = {
        SET title = @title, description = @description,
            startAt = @startAt, endAt = @endAt, isAllDay = @isAllDay,
            color = @color,
-           todoId = @todoId, updatedAt = @updatedAt
+           todoId = @todoId, stops = @stops, updatedAt = @updatedAt
        WHERE id = @id AND userId = @userId`,
-    ).run({ ...next, isAllDay: next.isAllDay ? 1 : 0, userId });
+    ).run({ ...next, isAllDay: next.isAllDay ? 1 : 0, stops: JSON.stringify(next.stops), userId });
 
     return next;
   },

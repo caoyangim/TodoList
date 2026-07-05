@@ -16,6 +16,11 @@ export const eventColorSchema = z.enum([
   "#6B7280",
 ]);
 
+const eventStopSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式必须为 YYYY-MM-DD"),
+  title: z.string().trim().min(1, "请输入节点标题").max(100),
+});
+
 const eventBaseSchema = z.object({
   title: z.string().trim().min(1, "请输入日程标题").max(200),
   description: optionalText(2000),
@@ -24,6 +29,7 @@ const eventBaseSchema = z.object({
   isAllDay: z.boolean().default(false),
   color: eventColorSchema.default("#3B82F6"),
   todoId: z.string().uuid().optional().nullable(),
+  stops: z.array(eventStopSchema).default([]),
 });
 
 export const eventInputSchema = eventBaseSchema.refine(

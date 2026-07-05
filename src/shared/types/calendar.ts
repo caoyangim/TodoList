@@ -13,6 +13,11 @@ export const EVENT_COLORS = [
 
 export type EventColor = (typeof EVENT_COLORS)[number]["value"];
 
+export interface EventStop {
+  date: string; // YYYY-MM-DD
+  title: string;
+}
+
 export interface EventItem {
   id: string;
   title: string;
@@ -48,6 +53,7 @@ export type CalendarEventDto = {
   isAllDay: boolean;
   color: EventColor;
   todoId: string | null;
+  stops: EventStop[];
   createdAt: string;
   updatedAt: string;
 };

@@ -139,7 +139,7 @@ export function CalendarWeekView({
   const rowMap = assignWeekRows(allDayEvents, dayKeys);
   const maxRow = allDayEvents.reduce((m, e) => Math.max(m, rowMap.get(e.id) ?? 0), -1);
   const allDayRows = maxRow >= 0 ? maxRow + 1 : 0;
-  const allDayHeight = allDayRows > 0 ? allDayRows * 24 + 4 : 0;
+  const allDayHeight = allDayRows > 0 ? allDayRows * 32 + 4 : 0;
 
   return (
     <div className="calendar-week-view">
@@ -212,8 +212,8 @@ export function CalendarWeekView({
                   onClick={() => onEventClick(event)}
                   style={{
                     gridColumn: `${colStart} / span ${span}`,
-                    marginTop: row * 24 + 2,
-                    height: 22,
+                    marginTop: row * 32 + 2,
+                    height: 28,
                   }}
                 />
               );
