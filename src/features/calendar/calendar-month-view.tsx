@@ -28,7 +28,7 @@ interface CalendarMonthViewProps {
   selectEnd: string | null;
   dateStyle: "centered" | "corner";
   onCellPointerDown: (date: string, e: React.PointerEvent) => void;
-  onCellPointerEnter: (date: string) => void;
+  onCellPointerEnter: () => void;
 }
 
 function buildCalendarDays(
@@ -338,16 +338,10 @@ export function CalendarMonthView({
                 });
               }
 
-              const stopLabels = allStops.map((s, si) => {
+              const stopLabels = allStops.map((s) => {
                 const idx = weekDates.indexOf(s.date);
                 const leftPercent = ((idx - effStart) / span) * 100;
                 const maxWidth = 100 / span;
-                const baseRgb = [
-                  parseInt(event.color.slice(1, 3), 16),
-                  parseInt(event.color.slice(3, 5), 16),
-                  parseInt(event.color.slice(5, 7), 16),
-                ];
-                // Use event color directly for stop labels
                 return { title: s.title, leftPercent, maxWidth, color: event.color };
               });
 

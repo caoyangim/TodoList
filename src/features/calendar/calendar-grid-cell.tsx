@@ -25,7 +25,7 @@ interface CalendarGridCellProps {
   isInSelectRange: boolean;
   dateStyle: "centered" | "corner";
   onPointerDown: (date: string, e: React.PointerEvent) => void;
-  onPointerEnter: (date: string) => void;
+  onPointerEnter: () => void;
 }
 
 const MAX_VISIBLE = 3;
@@ -82,7 +82,7 @@ export function CalendarGridCell({
         onPointerDown(date, e);
       }}
       onPointerEnter={() => {
-        if (selecting) onPointerEnter(date);
+        if (selecting) onPointerEnter();
       }}
     >
       <span className="calendar-cell-date">{dayNum}</span>

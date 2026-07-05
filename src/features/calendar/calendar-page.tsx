@@ -214,7 +214,7 @@ export function CalendarPage() {
     }, 400);
   }
 
-  function handleCellPointerEnter(_date: string) {
+  function handleCellPointerEnter() {
     // Cancel long-press if pointer moved before timer fires
     if (!selecting && longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -222,7 +222,7 @@ export function CalendarPage() {
     }
   }
 
-  function handlePointerUp(_e: React.PointerEvent) {
+  function handlePointerUp() {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
@@ -472,7 +472,7 @@ export function CalendarPage() {
         >
           <div className="form-stack">
             <p className="modal-description">
-              将永久删除"{pendingDeleteReminder.title}"，此操作无法撤销。
+              将永久删除&ldquo;{pendingDeleteReminder.title}&rdquo;，此操作无法撤销。
             </p>
             <div className="form-actions">
               <button
