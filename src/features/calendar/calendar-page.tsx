@@ -311,6 +311,7 @@ export function CalendarPage() {
         showReminders={showReminders}
         onToggleEvents={() => setShowEvents((v) => !v)}
         onToggleReminders={() => setShowReminders((v) => !v)}
+        events={events}
         reminders={reminders}
         busyId={busyId}
         onToggleReminder={handleToggleReminder}

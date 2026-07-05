@@ -1,65 +1,155 @@
 "use client";
 
-import { CheckCircle, Circle, Trash2 } from "lucide-react";
-import { CalendarReminderDto } from "@/shared/types/calendar";
+import { CheckCircle, Circle, Flag, MapPin, Trash2 } from "lucide-react";
+import { CalendarEventDto, CalendarReminderDto } from "@/shared/types/calendar";
 import { toDateString, toTimeString } from "./calendar-page";
 
+interface TodayEntry {
+  type: "reminder" | "event-start" | "event-end" | "stop";
+  id: string;
+  title: string;
+  time?: string;
+  color?: string;
+  completed?: boolean;
+}
+
 interface CalendarTodayRemindersProps {
+  events: CalendarEventDto[];
   reminders: CalendarReminderDto[];
   busyId: string | null;
-  onToggle: (id: string, isCompleted: boolean) => void;
-  onDelete: (id: string) => void;
+  onToggleReminder: (id: string, isCompleted: boolean) => void;
+  onDeleteReminder: (id: string) => void;
 }
 
 export function CalendarTodayReminders({
+  events,
   reminders,
   busyId,
-  onToggle,
-  onDelete,
+  onToggleReminder,
+  onDeleteReminder,
 }: CalendarTodayRemindersProps) {
   const today = toDateString(new Date().toISOString());
-  const todayReminders = reminders.filter(
-    (r) => toDateString(r.dueAt) === today,
-  );
+
+  const entries: TodayEntry[] = [];
+
+  // Reminders due today
+  for (const r of reminders) {
+    if (toDateString(r.dueAt) === today) {
+      entries.push({
+        type: "reminder",
+        id: r.id,
+        title: r.title,
+        time: toTimeString(r.dueAt),
+        completed: r.isCompleted,
+      });
+    }
+  }
+
+  // Events starting today
+  for (const e of events) {
+    if (toDateString(e.startAt) === today) {
+      entries.push({
+        type: "event-start",
+        id: e.id,
+        title: e.title,
+        color: e.color,
+      });
+    }
+  }
+
+  // Events ending today (only if start != end, to avoid duplicate with start)
+  for (const e of events) {
+    if (toDateString(e.endAt) === today && toDateString(e.startAt) !== today) {
+      entries.push({
+        type: "event-end",
+        id: e.id,
+        title: e.title,
+        color: e.color,
+      });
+    }
+  }
+
+  // Stops on today
+  for (const e of events) {
+    for (const s of e.stops ?? []) {
+      if (s.date === today) {
+        entries.push({
+          type: "stop",
+          id: `${e.id}-stop-${s.date}`,
+          title: s.title,
+          color: e.color,
+        });
+      }
+    }
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="calendar-today-panel">
+        <div className="calendar-today-panel-title">今日</div>
+        <div style={{ fontSize: 13, color: "#9CA3AF" }}>今天没有安排</div>
+      </div>
+    );
+  }
 
   return (
     <div className="calendar-today-panel">
-      <div className="calendar-today-panel-title">今日提醒</div>
-      {todayReminders.length === 0 && (
-        <div style={{ fontSize: 13, color: "#9CA3AF" }}>今天没有提醒</div>
-      )}
-      {todayReminders.map((r) => {
-        const busy = busyId === `reminder:${r.id}`;
+      <div className="calendar-today-panel-title">今日</div>
+      {entries.map((entry) => {
+        const isReminder = entry.type === "reminder";
+        const busy = isReminder && busyId === `reminder:${entry.id}`;
+
         return (
           <div
-            key={r.id}
-            className={`calendar-today-item ${r.isCompleted ? "completed" : ""}`}
+            key={entry.id}
+            className={`calendar-today-item ${entry.completed ? "completed" : ""}`}
             onClick={() => {
               if (busy) return;
-              onToggle(r.id, r.isCompleted);
+              if (isReminder) onToggleReminder(entry.id, entry.completed ?? false);
             }}
           >
-            <span
-              className={`calendar-today-check ${r.isCompleted ? "checked" : ""}`}
-            >
-              {r.isCompleted ? <CheckCircle size={14} /> : <Circle size={14} />}
+            {/* Icon */}
+            <span className="calendar-today-item-icon">
+              {entry.type === "reminder" ? (
+                entry.completed ? <CheckCircle size={14} /> : <Circle size={14} />
+              ) : entry.type === "stop" ? (
+                <MapPin size={14} color={entry.color} />
+              ) : (
+                <Flag size={14} color={entry.color} />
+              )}
             </span>
-            <span className="calendar-today-item-text">{r.title}</span>
-            <span className="calendar-today-time">
-              {toTimeString(r.dueAt)}
+
+            {/* Label */}
+            <span className="calendar-today-item-label">
+              {entry.type === "reminder" && "提醒"}
+              {entry.type === "event-start" && "开始"}
+              {entry.type === "event-end" && "结束"}
+              {entry.type === "stop" && "节点"}
             </span>
-            <button
-              type="button"
-              className="reminder-tag-delete"
-              title="删除提醒"
-              disabled={busy}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(r.id);
-              }}
-            >
-              <Trash2 size={12} />
-            </button>
+
+            {/* Title */}
+            <span className="calendar-today-item-text">{entry.title}</span>
+
+            {/* Time (reminders only) */}
+            {entry.time && (
+              <span className="calendar-today-time">{entry.time}</span>
+            )}
+
+            {/* Delete (reminders only) */}
+            {isReminder && (
+              <button
+                type="button"
+                className="reminder-tag-delete"
+                title="删除提醒"
+                disabled={busy}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteReminder(entry.id);
+                }}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
         );
       })}

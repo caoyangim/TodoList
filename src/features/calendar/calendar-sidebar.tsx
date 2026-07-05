@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { CalendarReminderDto } from "@/shared/types/calendar";
+import { CalendarEventDto, CalendarReminderDto } from "@/shared/types/calendar";
 import { CalendarTodayReminders } from "./calendar-today-reminders";
 
 interface CalendarSidebarProps {
@@ -9,6 +9,7 @@ interface CalendarSidebarProps {
   showReminders: boolean;
   onToggleEvents: () => void;
   onToggleReminders: () => void;
+  events: CalendarEventDto[];
   reminders: CalendarReminderDto[];
   busyId: string | null;
   onToggleReminder: (id: string, isCompleted: boolean) => void;
@@ -18,7 +19,7 @@ interface CalendarSidebarProps {
 
 export function CalendarSidebar({
   showEvents, showReminders, onToggleEvents, onToggleReminders,
-  reminders, busyId, onToggleReminder, onDeleteReminder, onCreateClick,
+  events, reminders, busyId, onToggleReminder, onDeleteReminder, onCreateClick,
 }: CalendarSidebarProps) {
   return (
     <aside className="workspace-sidebar" aria-label="日程列表">
@@ -49,7 +50,7 @@ export function CalendarSidebar({
         </label>
       </div>
 
-      <CalendarTodayReminders reminders={reminders} busyId={busyId} onToggle={onToggleReminder} onDelete={onDeleteReminder} />
+      <CalendarTodayReminders events={events} reminders={reminders} busyId={busyId} onToggleReminder={onToggleReminder} onDeleteReminder={onDeleteReminder} />
     </aside>
   );
 }

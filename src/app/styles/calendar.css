@@ -430,6 +430,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.calendar-today-item-icon {
+  display: flex; align-items: center;
+  flex-shrink: 0;
+}
+.calendar-today-item-label {
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 28px;
+}
 
 /* ========================================
    Week View
