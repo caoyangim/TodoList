@@ -144,6 +144,33 @@ db.exec(`
     FOREIGN KEY(runId) REFERENCES SopRun(id) ON DELETE CASCADE,
     UNIQUE(runId, sortOrder)
   );
+
+  CREATE TABLE IF NOT EXISTS CalendarEvent (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    startAt TEXT NOT NULL,
+    endAt TEXT NOT NULL,
+    isAllDay INTEGER NOT NULL DEFAULT 0,
+    color TEXT NOT NULL DEFAULT '#3B82F6',
+    todoId TEXT UNIQUE REFERENCES Todo(id) ON DELETE SET NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS CalendarReminder (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL REFERENCES User(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    dueAt TEXT NOT NULL,
+    isCompleted INTEGER NOT NULL DEFAULT 0,
+    repeat TEXT NOT NULL DEFAULT 'none' CHECK(repeat IN ('none', 'daily', 'weekly')),
+    todoId TEXT UNIQUE REFERENCES Todo(id) ON DELETE SET NULL,
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  );
 `);
 
 function ensureColumn(table: string, column: string, definition: string) {
@@ -196,6 +223,7 @@ ensureColumn("SopRunNode", "noteRequired", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("Note", "contentHtml", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("Note", "excerpt", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("Note", "deletedAt", "TEXT");
+ensureColumn("CalendarEvent", "color", "TEXT NOT NULL DEFAULT '#3B82F6'");
 ensureColumn("Note", "content", "TEXT NOT NULL DEFAULT '{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}'");
 
 db.exec(`
@@ -203,6 +231,12 @@ db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS Todo_runId_key ON Todo(runId) WHERE runId IS NOT NULL;
   CREATE INDEX IF NOT EXISTS Note_userId_updatedAt_idx ON Note(userId, updatedAt);
   CREATE INDEX IF NOT EXISTS Note_deletedAt_idx ON Note(deletedAt);
+  CREATE INDEX IF NOT EXISTS CalendarEvent_userId_idx ON CalendarEvent(userId);
+  CREATE INDEX IF NOT EXISTS CalendarEvent_startAt_idx ON CalendarEvent(startAt);
+  CREATE INDEX IF NOT EXISTS CalendarEvent_todoId_idx ON CalendarEvent(todoId);
+  CREATE INDEX IF NOT EXISTS CalendarReminder_userId_idx ON CalendarReminder(userId);
+  CREATE INDEX IF NOT EXISTS CalendarReminder_dueAt_idx ON CalendarReminder(dueAt);
+  CREATE INDEX IF NOT EXISTS CalendarReminder_todoId_idx ON CalendarReminder(todoId);
 `);
 
 function migrateSopRunVersionConstraint() {

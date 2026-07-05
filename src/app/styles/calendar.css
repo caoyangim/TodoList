@@ -1,0 +1,447 @@
+/* ========================================
+   Calendar — TodoFlow design system
+   Tokens: --accent #d84b3e  --line #e5ddd5
+           --background #f6f3ef  --surface #fff
+           --text #24211f  --muted #6f6861
+   ======================================== */
+
+/* --- Page layout --- */
+.calendar-workspace {
+  min-height: 0;
+}
+
+/* Tighter sidebar padding than the default workspace-sidebar */
+.calendar-workspace .workspace-sidebar {
+  padding: 20px 14px;
+}
+
+.calendar-main {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 28px 60px;
+  overflow-y: auto;
+  background: var(--background);
+}
+
+/* --- Sidebar: legend --- */
+.calendar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.calendar-legend-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 2px;
+}
+.calendar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.calendar-legend-swatch {
+  width: 12px; height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.calendar-legend-swatch.event   { background: var(--accent-soft); border: 1px solid var(--accent); }
+.calendar-legend-swatch.reminder { background: #fff7ed; border: 1px solid #f97316; }
+
+/* --- Sidebar: today panel --- */
+.calendar-today-panel {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 6px;
+}
+.calendar-today-panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.calendar-today-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.calendar-today-item:hover { background: var(--surface-muted); }
+.calendar-today-item.completed { color: var(--muted); text-decoration: line-through; }
+.calendar-today-check {
+  width: 16px; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--line-strong);
+}
+.calendar-today-check.checked { color: var(--accent); }
+.calendar-today-time {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* --- Header --- */
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.calendar-nav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+}
+.calendar-nav-btn:hover { background: var(--surface-muted); color: var(--text); }
+.calendar-month-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 140px;
+  text-align: center;
+  user-select: none;
+}
+.calendar-today-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 30px; padding: 5px 12px;
+  font-size: 12px; font-weight: 600;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.calendar-today-btn:hover { background: var(--accent-soft); }
+
+.calendar-view-tabs {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.calendar-view-tab {
+  padding: 5px 14px;
+  font-size: 12px; font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: none;
+  cursor: pointer;
+}
+.calendar-view-tab:not(:last-child) { border-right: 1px solid var(--line); }
+.calendar-view-tab:hover { background: var(--surface-muted); }
+.calendar-view-tab.active {
+  color: white;
+  background: var(--accent);
+}
+
+/* ========================================
+   Month View — Grid
+   ======================================== */
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-left: 1px solid var(--line);
+}
+.calendar-weekday {
+  display: flex; align-items: center; justify-content: center;
+  padding: 7px 0;
+  font-size: 11px; font-weight: 600;
+  color: var(--muted);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+}
+
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  min-height: 96px;
+  padding: 5px 5px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  overflow: hidden;
+}
+.calendar-cell:hover { background: #faf8f6; }
+.calendar-cell.today { background: var(--accent-soft); }
+.calendar-cell.other-month .calendar-cell-date { color: var(--line-strong); }
+
+.calendar-cell-date {
+  width: 24px; height: 24px;
+  line-height: 24px;
+  text-align: center;
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  border-radius: 50%;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+.calendar-cell.today .calendar-cell-date {
+  background: var(--accent);
+  color: white;
+}
+.calendar-cell-more {
+  font-size: 11px; color: var(--muted);
+  padding: 2px 4px; cursor: pointer;
+}
+
+/* ========================================
+   Event bars (shared: month + week)
+   ======================================== */
+
+.event-bar {
+  display: block;
+  padding: 1px 6px;
+  margin-bottom: 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: filter .1s;
+}
+.event-bar:hover { filter: brightness(.93); }
+
+/* Position-based corner radius for cross-day bars */
+.event-bar.start  { border-radius: 4px 0 0 4px; }
+.event-bar.middle { border-radius: 0; }
+.event-bar.end    { border-radius: 0 4px 4px 0; }
+
+/* Cross-day bars overlay the cell padding area, same grid row as cells */
+.calendar-grid > .event-bar {
+  margin: 2px 4px;
+  height: 20px;
+  line-height: 20px;
+  align-self: start;
+  z-index: 2;
+}
+
+/* --- Reminder tags --- */
+.reminder-tag {
+  display: flex; align-items: center; gap: 3px;
+  padding: 1px 5px; margin-bottom: 2px;
+  font-size: 11px; line-height: 1.45;
+  color: #c2410c;
+  background: #fff7ed;
+  border-radius: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.reminder-tag:hover { filter: brightness(.95); }
+.reminder-tag.completed {
+  color: var(--muted);
+  background: #f3f4f6;
+  text-decoration: line-through;
+}
+.reminder-tag-icon {
+  display: inline-flex; align-items: center;
+  flex-shrink: 0; width: 13px; height: 13px;
+}
+.reminder-tag-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reminder-tag-delete {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  width: 20px; height: 20px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+}
+.reminder-tag:hover .reminder-tag-delete,
+.calendar-today-item:hover .reminder-tag-delete {
+  opacity: 1;
+}
+.reminder-tag-delete:hover {
+  color: #ef4444;
+}
+
+/* Today reminder item extras */
+.calendar-today-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ========================================
+   Week View
+   ======================================== */
+
+.calendar-week-view {
+  display: flex; flex-direction: column;
+  flex: 1; overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.week-header-row {
+  display: grid;
+  grid-template-columns: 48px repeat(7, 1fr);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-muted);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.week-time-gutter {
+  width: 48px; flex-shrink: 0;
+  border-right: 1px solid var(--line);
+}
+
+.week-gutter-label {
+  display: block;
+  font-size: 10px; color: var(--muted);
+  text-align: right; padding: 2px 6px 0 0;
+}
+
+.week-day-header {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 7px 4px;
+  border-right: 1px solid var(--line);
+}
+.week-day-header:last-child { border-right: none; }
+.week-day-header.today { background: var(--accent-soft); }
+
+.week-day-name {
+  font-size: 10px; font-weight: 600;
+  color: var(--muted);
+}
+.week-day-date {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  font-size: 14px; font-weight: 600;
+  color: var(--text);
+  border-radius: 50%;
+  margin-top: 1px;
+}
+.week-day-date.today { background: var(--accent); color: white; }
+
+/* All-day row in week — continuous bar overlay */
+.week-all-day-row {
+  border-bottom: 2px solid var(--line);
+  background: var(--surface-muted);
+}
+.week-all-day-row .event-bar {
+  margin: 0 3px;
+  line-height: 22px;
+}
+
+/* Time grid */
+.week-time-grid {
+  display: grid;
+  grid-template-columns: 48px repeat(7, 1fr);
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.week-hour-label {
+  display: flex; align-items: flex-start; justify-content: flex-end;
+  padding: 0 6px;
+  font-size: 10px; color: var(--muted);
+  border-right: 1px solid var(--line);
+  margin-top: -5px;
+}
+
+.week-day-column {
+  position: relative;
+  border-right: 1px solid var(--line);
+}
+.week-day-column:last-child { border-right: none; }
+.week-day-column.today { background: #fefaf8; }
+
+.week-hour-slot {
+  border-bottom: 1px solid #f5f0eb;
+  cursor: pointer;
+}
+.week-hour-slot:hover { background: #faf7f4; }
+
+/* Current time line */
+.week-now-line {
+  position: absolute; left: 0; right: 0;
+  height: 2px; background: var(--accent);
+  z-index: 4; pointer-events: none;
+}
+.week-now-dot {
+  position: absolute; left: -4px; top: -3px;
+  width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent);
+}
+
+/* Event blocks on time grid */
+.week-event-block {
+  position: absolute; left: 2px; right: 2px;
+  padding: 2px 5px; border-radius: 4px;
+  font-size: 11px; line-height: 1.4;
+  overflow: hidden; cursor: pointer;
+  z-index: 2;
+}
+.week-event-block:hover { filter: brightness(.93); }
+.week-event-time { font-weight: 600; margin-right: 3px; }
+.week-event-title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.week-reminder-marker {
+  position: absolute; left: 2px; right: 2px; z-index: 1;
+}
+
+/* ========================================
+   Creator Modal
+   ======================================== */
+
+.segment-control {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+.segment-btn {
+  flex: 1; padding: 7px 0;
+  font-size: 13px; font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: none; cursor: pointer;
+}
+.segment-btn:not(:last-child) { border-right: 1px solid var(--line); }
+.segment-btn:hover { background: var(--surface-muted); }
+.segment-btn.active { color: white; background: var(--accent); }

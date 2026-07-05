@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 
 export function AppMain({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const layoutMode = pathname.startsWith("/notes") ? "workspace" : "standard";
+  const layoutMode =
+    pathname.startsWith("/notes") || pathname.startsWith("/calendar") ? "workspace" : "standard";
 
   return (
     <main className="main-content" data-layout-mode={layoutMode}>
