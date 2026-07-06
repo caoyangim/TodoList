@@ -625,3 +625,97 @@
   cursor: pointer;
 }
 .event-stop-add:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ========================================
+   Mobile responsive
+   ======================================== */
+
+@media (max-width: 760px) {
+  .calendar-main {
+    padding: 12px 8px 40px;
+  }
+
+  .calendar-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .calendar-month-label {
+    min-width: auto;
+    font-size: 14px;
+  }
+
+  .calendar-header-right {
+    gap: 4px;
+  }
+
+  .calendar-today-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .calendar-nav-btn {
+    width: 26px; height: 26px;
+    font-size: 14px;
+  }
+
+  /* Cells */
+  .calendar-cell {
+    min-height: 70px;
+    padding: 2px 2px;
+  }
+
+  .calendar-cell-date {
+    font-size: 22px;
+  }
+  .calendar-cell.today .calendar-cell-date {
+    width: 28px; height: 28px;
+    line-height: 28px;
+    font-size: 14px;
+  }
+
+  .calendar-cell.date-corner .calendar-cell-date {
+    width: 22px; height: 22px;
+    line-height: 22px;
+    font-size: 13px;
+    top: 2px; left: 2px;
+  }
+  .calendar-cell.date-corner.today .calendar-cell-date {
+    width: 22px; height: 22px;
+    line-height: 22px;
+    font-size: 13px;
+  }
+
+  /* Events */
+  .event-bar {
+    font-size: 10px;
+    padding: 1px 4px;
+    margin-bottom: 1px;
+  }
+
+  .reminder-tag {
+    font-size: 10px;
+    padding: 1px 4px;
+    margin-bottom: 1px;
+  }
+
+  .calendar-grid > .event-bar {
+    height: 16px;
+    line-height: 16px;
+    margin: 1px 2px;
+  }
+
+  .event-bar-stop {
+    font-size: 10px;
+  }
+
+  /* Weekday headers */
+  .calendar-weekday {
+    font-size: 10px;
+    padding: 4px 0;
+  }
+
+  .calendar-cell-more {
+    font-size: 10px;
+  }
+}
