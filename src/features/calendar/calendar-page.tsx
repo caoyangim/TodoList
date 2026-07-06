@@ -201,6 +201,14 @@ export function CalendarPage() {
   // --- Selection ---
   function handleCellPointerDown(date: string, e: React.PointerEvent) {
     if (selecting) {
+      if (selectEnd) {
+        // Already have a range selected — cancel selection
+        setSelecting(false);
+        setSelectStart(null);
+        setSelectEnd(null);
+        setSelectMenuPos(null);
+        return;
+      }
       // Second tap after long-press: set end date and show popup
       setSelectEnd(date);
       setSelectMenuPos({ x: e.clientX, y: e.clientY });
