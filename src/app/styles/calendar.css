@@ -631,6 +631,14 @@
    ======================================== */
 
 @media (max-width: 760px) {
+  .calendar-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-workspace .workspace-sidebar {
+    padding: 12px;
+  }
+
   .calendar-main {
     padding: 12px 8px 40px;
   }
