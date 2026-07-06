@@ -157,7 +157,7 @@ export function CalendarPage() {
 
   // --- Header label ---
   const headerLabel = view === "month"
-    ? `${currentMonth.year}年`
+    ? `${currentMonth.year}年${currentMonth.month + 1}月`
     : formatWeekRange(weekStart);
 
   // --- Creator ---

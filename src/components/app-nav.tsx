@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Calendar, CheckSquare, ClipboardList, FileText, KeyRound, LayoutDashboard, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Users } from "lucide-react";
+import { Calendar, CheckSquare, ClipboardList, FileText, KeyRound, LayoutDashboard, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Users } from "lucide-react";
 import { Modal } from "@/components/modal";
 import { CurrentUserDto } from "@/shared/types/models";
 import { useSidebarStore } from "@/shared/stores/sidebar-store";
@@ -23,6 +23,7 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
   const router = useRouter();
   const [confirmingLogout, setConfirmingLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { collapsed, toggle } = useSidebarStore();
 
   useEffect(() => {
@@ -69,29 +70,65 @@ export function AppNav({ user }: { user: CurrentUserDto }) {
         </nav>
         <div className="nav-account">
           <div className="nav-username">{user.username}</div>
-          {user.role === "ADMIN" && (
-            <Link className="nav-link" href="/admin/users" title={collapsed ? "账号管理" : undefined}>
-              <Users size={17} />
-              <span className="nav-label">账号管理</span>
+          <div className="nav-account-links">
+            {user.role === "ADMIN" && (
+              <Link className="nav-link" href="/admin/users" title={collapsed ? "账号管理" : undefined}>
+                <Users size={17} />
+                <span className="nav-label">账号管理</span>
+              </Link>
+            )}
+            <Link
+              className={`nav-link ${pathname.startsWith("/account") ? "active" : ""}`}
+              href="/account"
+              title={collapsed ? "账号设置" : undefined}
+            >
+              <KeyRound size={17} />
+              <span className="nav-label">账号设置</span>
             </Link>
-          )}
-          <Link
-            className={`nav-link ${pathname.startsWith("/account") ? "active" : ""}`}
-            href="/account"
-            title={collapsed ? "账号设置" : undefined}
-          >
-            <KeyRound size={17} />
-            <span className="nav-label">账号设置</span>
-          </Link>
+            <button
+              className="nav-link nav-button"
+              type="button"
+              onClick={() => setConfirmingLogout(true)}
+              title={collapsed ? "退出登录" : undefined}
+            >
+              <LogOut size={17} />
+              <span className="nav-label">退出登录</span>
+            </button>
+          </div>
           <button
-            className="nav-link nav-button"
+            className="nav-link nav-user-menu-btn"
             type="button"
-            onClick={() => setConfirmingLogout(true)}
-            title={collapsed ? "退出登录" : undefined}
+            onClick={() => setUserMenuOpen((v) => !v)}
+            title="设置"
           >
-            <LogOut size={17} />
-            <span className="nav-label">退出登录</span>
+            <Settings size={18} />
+            <span className="nav-label">设置</span>
           </button>
+          {userMenuOpen && (
+            <>
+              <div className="nav-user-menu-backdrop" onClick={() => setUserMenuOpen(false)} />
+              <div className="nav-user-menu">
+                {user.role === "ADMIN" && (
+                  <Link className="nav-link" href="/admin/users" onClick={() => setUserMenuOpen(false)}>
+                    <Users size={16} />
+                    <span className="nav-label">账号管理</span>
+                  </Link>
+                )}
+                <Link className="nav-link" href="/account" onClick={() => setUserMenuOpen(false)}>
+                  <KeyRound size={16} />
+                  <span className="nav-label">账号设置</span>
+                </Link>
+                <button
+                  className="nav-link nav-button"
+                  type="button"
+                  onClick={() => { setUserMenuOpen(false); setConfirmingLogout(true); }}
+                >
+                  <LogOut size={16} />
+                  <span className="nav-label">退出登录</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
