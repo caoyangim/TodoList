@@ -475,22 +475,28 @@ export function NoteEditor({
         return applyMarkdownShortcut(currentEditor, action);
       },
       handlePaste(_view, event) {
-        const files = extractClipboardImageFiles(event.clipboardData);
-        if (files.length === 0) {
+        try {
+          const files = extractClipboardImageFiles(event.clipboardData);
+          if (files.length === 0) {
+            return false;
+          }
+
+          const currentEditor = editorRef.current;
+          if (!currentEditor) return false;
+          const anchor = getUploadAnchor(currentEditor);
+          if (!anchor) return false;
+
+          event.preventDefault();
+          const placeholders = createPendingImageUploads(files, anchor);
+          setUploadError("");
+          setPendingImageUploads((current) => [...current, ...placeholders]);
+          void processImageUploadBatch(placeholders, "图片粘贴失败");
+          return true;
+        } catch (error) {
+          console.error("Failed to handle pasted note image", error);
+          setUploadError("图片粘贴失败，请重试或使用上传图片");
           return false;
         }
-
-        const currentEditor = editorRef.current;
-        if (!currentEditor) return false;
-        const anchor = getUploadAnchor(currentEditor);
-        if (!anchor) return false;
-
-        event.preventDefault();
-        const placeholders = createPendingImageUploads(files, anchor);
-        setUploadError("");
-        setPendingImageUploads((current) => [...current, ...placeholders]);
-        void processImageUploadBatch(placeholders, "图片粘贴失败");
-        return true;
       },
     },
     extensions: createNoteEditorExtensions({

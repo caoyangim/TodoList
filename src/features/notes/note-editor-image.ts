@@ -17,12 +17,16 @@ type InsertableNoteImage = {
   title?: string;
 };
 
-function isImageFile(file: File) {
-  return file.type.startsWith("image/");
+type ImageFileLike = {
+  type?: string;
+};
+
+function isImageFileLike(file: ImageFileLike | null | undefined): file is File {
+  return typeof file?.type === "string" && file.type.startsWith("image/");
 }
 
 function isPresentImageFile(file: File | null): file is File {
-  return file instanceof File && isImageFile(file);
+  return isImageFileLike(file);
 }
 
 export function extractClipboardImageFiles(
@@ -37,7 +41,7 @@ export function extractClipboardImageFiles(
     return itemFiles;
   }
 
-  return Array.from(clipboardData?.files ?? []).filter(isImageFile);
+  return Array.from(clipboardData?.files ?? []).filter(isImageFileLike);
 }
 
 export function buildNoteImageInsertContent(images: InsertableNoteImage[]): JSONContent[] {
