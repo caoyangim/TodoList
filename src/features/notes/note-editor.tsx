@@ -34,6 +34,7 @@ import { uploadNoteImage } from "@/shared/note-image-client";
 import { uploadNoteFile } from "@/shared/note-file-client";
 import { createNoteEditorExtensions, NoteDocumentDto } from "@/shared/note-document";
 import { NoteDto, NoteFileDto } from "@/shared/types/models";
+import { buildNoteImageInsertContent, extractClipboardImageFiles } from "@/features/notes/note-editor-image";
 
 type SlashCommandItem = {
   id: string;
@@ -93,14 +94,6 @@ function openSafeExternalLink(value: string | null | undefined) {
   if (!normalized) return false;
   window.open(normalized, "_blank", "noopener,noreferrer");
   return true;
-}
-
-function insertPastedImages(_editor: Editor, items: DataTransferItem[]) {
-  const imageItems = items.filter((item) => item.type.startsWith("image/"));
-  if (imageItems.length === 0) return false;
-
-  const files = imageItems.map((item) => item.getAsFile()).filter((file): file is File => Boolean(file));
-  return files;
 }
 
 function getMarkdownShortcutAction(value: string): MarkdownShortcutAction | null {
@@ -375,14 +368,13 @@ export function NoteEditor({
           .focus()
           .insertContentAt(
             pos,
-            sortedEntries.map(({ item, image }) => ({
-              attrs: {
+            buildNoteImageInsertContent(
+              sortedEntries.map(({ item, image }) => ({
                 alt: item.name || "图片",
                 src: image.url,
                 title: item.name || "图片",
-              },
-              type: "image",
-            })),
+              })),
+            ),
           )
           .run();
       }
@@ -483,8 +475,8 @@ export function NoteEditor({
         return applyMarkdownShortcut(currentEditor, action);
       },
       handlePaste(_view, event) {
-        const items = Array.from(event.clipboardData?.items ?? []);
-        if (!items.some((item) => item.type.startsWith("image/"))) {
+        const files = extractClipboardImageFiles(event.clipboardData);
+        if (files.length === 0) {
           return false;
         }
 
@@ -494,9 +486,6 @@ export function NoteEditor({
         if (!anchor) return false;
 
         event.preventDefault();
-        const files = insertPastedImages(currentEditor, items);
-        if (!files || files.length === 0) return true;
-
         const placeholders = createPendingImageUploads(files, anchor);
         setUploadError("");
         setPendingImageUploads((current) => [...current, ...placeholders]);
