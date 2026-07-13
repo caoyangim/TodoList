@@ -34,7 +34,11 @@ import { uploadNoteImage } from "@/shared/note-image-client";
 import { uploadNoteFile } from "@/shared/note-file-client";
 import { createNoteEditorExtensions, NoteDocumentDto } from "@/shared/note-document";
 import { NoteDto, NoteFileDto } from "@/shared/types/models";
-import { buildNoteImageInsertContent, extractClipboardImageFiles } from "@/features/notes/note-editor-image";
+import {
+  buildNoteImageInsertContent,
+  createClientUploadId,
+  extractClipboardImageFiles,
+} from "@/features/notes/note-editor-image";
 
 type SlashCommandItem = {
   id: string;
@@ -215,7 +219,7 @@ export function NoteEditor({
     anchor: { left: number; pos: number; top: number },
   ) {
     return files.map((file, index) => ({
-      id: crypto.randomUUID(),
+      id: createClientUploadId(),
       file,
       left: anchor.left,
       name: file.name || `图片 ${index + 1}`,

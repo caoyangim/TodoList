@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildNoteImageInsertContent,
+  createClientUploadId,
   extractClipboardImageFiles,
 } from "@/features/notes/note-editor-image";
 
@@ -61,5 +62,22 @@ describe("note editor image helpers", () => {
         type: "paragraph",
       },
     ]);
+  });
+
+  it("falls back to a generated id when randomUUID is unavailable", () => {
+    const originalCrypto = globalThis.crypto;
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {},
+    });
+
+    try {
+      expect(createClientUploadId()).toMatch(/^note-image-\d+-[a-z0-9]+$/);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        value: originalCrypto,
+      });
+    }
   });
 });

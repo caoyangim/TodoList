@@ -29,6 +29,13 @@ function isPresentImageFile(file: File | null): file is File {
   return isImageFileLike(file);
 }
 
+export function createClientUploadId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `note-image-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function extractClipboardImageFiles(
   clipboardData: ClipboardImageSource | null | undefined,
 ) {
