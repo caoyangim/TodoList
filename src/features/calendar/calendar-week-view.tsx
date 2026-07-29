@@ -4,6 +4,7 @@ import { CalendarEventDto, CalendarReminderDto } from "@/shared/types/calendar";
 import { CalendarEventBar } from "./calendar-event-bar";
 import { CalendarReminderTag } from "./calendar-reminder-tag";
 import { toDateString, toTimeString } from "./calendar-page";
+import { assignDateRangeRows, assignTimedRangeLanes } from "./calendar-event-layout";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 const HOUR_HEIGHT = 60;
@@ -43,32 +44,6 @@ function minutesSinceMidnight(iso: string): number {
 }
 
 /** Row assignment for cross-day/all-day events within a single week */
-function assignWeekRows(events: CalendarEventDto[], dayKeys: string[]): Map<string, number> {
-  const annotated = events.map((e) => ({
-    event: e,
-    start: dayKeys.indexOf(toDateString(e.startAt)),
-    end: dayKeys.indexOf(toDateString(e.endAt)),
-  }));
-
-  annotated.sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    return b.end - a.end;
-  });
-
-  const rowMap = new Map<string, number>();
-  const rowEnds: number[] = [];
-
-  for (const { event, start, end } of annotated) {
-    let row = 0;
-    while (row < rowEnds.length && rowEnds[row] >= start) row++;
-    rowMap.set(event.id, row);
-    if (row < rowEnds.length) rowEnds[row] = end;
-    else rowEnds.push(end);
-  }
-
-  return rowMap;
-}
-
 export function CalendarWeekView({
   weekStart,
   events,
@@ -136,7 +111,15 @@ export function CalendarWeekView({
   }
 
   // --- Row assignment for all-day bars ---
-  const rowMap = assignWeekRows(allDayEvents, dayKeys);
+  const rowMap = assignDateRangeRows(
+    allDayEvents.map((event) => ({
+      id: event.id,
+      start: toDateString(event.startAt),
+      end: toDateString(event.endAt),
+    })),
+    dayKeys[0],
+    dayKeys[dayKeys.length - 1],
+  );
   const maxRow = allDayEvents.reduce((m, e) => Math.max(m, rowMap.get(e.id) ?? 0), -1);
   const allDayRows = maxRow >= 0 ? maxRow + 1 : 0;
   const allDayHeight = allDayRows > 0 ? allDayRows * 32 + 4 : 0;
@@ -241,6 +224,11 @@ export function CalendarWeekView({
         {days.map((day) => {
           const key = dateKey(day);
           const dayEvents = timedByDay.get(key) ?? [];
+          const timedLayouts = assignTimedRangeLanes(dayEvents.map(({ event }) => ({
+            id: event.id,
+            start: minutesSinceMidnight(event.startAt),
+            end: minutesSinceMidnight(event.endAt),
+          })));
           const dayReminders = remindersByDay.get(key) ?? [];
           const isToday = key === todayStr;
 
@@ -264,12 +252,17 @@ export function CalendarWeekView({
               ))}
 
               {dayEvents.map(({ event, top, height }) => (
-                <div
+                (() => {
+                  const layout = timedLayouts.get(event.id) ?? { lane: 0, laneCount: 1 };
+                  const width = 100 / layout.laneCount;
+                  return <div
                   key={event.id}
                   className="week-event-block"
                   style={{
                     top,
                     height,
+                    left: `calc(${layout.lane * width}% + 2px)`,
+                    right: `calc(${100 - (layout.lane + 1) * width}% + 2px)`,
                     backgroundColor: `${event.color ?? "#3B82F6"}28`,
                     color: event.color ?? "#3B82F6",
                     borderLeft: `3px solid ${event.color ?? "#3B82F6"}`,
@@ -283,7 +276,8 @@ export function CalendarWeekView({
                     {toTimeString(event.startAt)}
                   </span>
                   <span className="week-event-title">{event.title}</span>
-                </div>
+                </div>;
+                })()
               ))}
 
               {dayReminders.map((r) => {

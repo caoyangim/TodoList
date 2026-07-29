@@ -7,6 +7,7 @@ import {
 import { CalendarGridCell } from "./calendar-grid-cell";
 import { CalendarEventBar } from "./calendar-event-bar";
 import { toDateString } from "./calendar-page";
+import { assignDateRangeRows } from "./calendar-event-layout";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -87,40 +88,6 @@ function buildCalendarDays(
  *
  * Result: same event → same row across all cells; no overlaps; minimal rows.
  */
-function assignCrossDayRows(
-  crossDayEvents: CalendarEventDto[],
-  days: { date: string }[],
-): Map<string, number> {
-  const indexOf = new Map<string, number>();
-  for (let i = 0; i < days.length; i++) indexOf.set(days[i].date, i);
-
-  const annotated = crossDayEvents
-    .map((e) => ({
-      event: e,
-      start: indexOf.get(toDateString(e.startAt)) ?? -1,
-      end: indexOf.get(toDateString(e.endAt)) ?? -1,
-    }))
-    .filter((a) => a.start >= 0 && a.end >= 0);
-
-  annotated.sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
-    return b.end - a.end;
-  });
-
-  const rowMap = new Map<string, number>();
-  const rowEnds: number[] = [];
-
-  for (const { event, start, end } of annotated) {
-    let row = 0;
-    while (row < rowEnds.length && rowEnds[row] >= start) row++;
-    rowMap.set(event.id, row);
-    if (row < rowEnds.length) rowEnds[row] = end;
-    else rowEnds.push(end);
-  }
-
-  return rowMap;
-}
-
 export function CalendarMonthView({
   year,
   month,
@@ -164,7 +131,15 @@ export function CalendarMonthView({
     }
 
     if (crossDayEvents.length > 0) {
-      const map = assignCrossDayRows(crossDayEvents, days);
+      const map = assignDateRangeRows(
+        crossDayEvents.map((event) => ({
+          id: event.id,
+          start: toDateString(event.startAt),
+          end: toDateString(event.endAt),
+        })),
+        days[0].date,
+        days[days.length - 1].date,
+      );
       for (const [id, row] of map) crossDayRowMap.set(id, row);
 
       for (const e of crossDayEvents) {
