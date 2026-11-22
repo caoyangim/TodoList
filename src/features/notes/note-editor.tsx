@@ -629,11 +629,17 @@ export function NoteEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const current = JSON.stringify(editor.getJSON());
-    const next = JSON.stringify(content);
-    if (current !== next) {
-      editor.commands.setContent(content, { emitUpdate: false });
+    try {
+      if (editor.schema.nodeFromJSON(content).eq(editor.state.doc)) return;
+    } catch {
+      // invalid content falls through to setContent
     }
+    const { from, to } = editor.state.selection;
+    editor
+      .chain()
+      .setContent(content, { emitUpdate: false })
+      .setTextSelection({ from, to })
+      .run();
   }, [content, editor]);
 
   useEffect(() => {
